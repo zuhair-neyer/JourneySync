@@ -8,21 +8,23 @@ import { AuthStatus } from '@/components/layout/auth-status';
 import { JourneySyncLogo } from '@/components/icons';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/contexts/AuthContext';
-import { TripProvider } from '@/contexts/TripContext'; // Added TripProvider
+import { TripProvider } from '@/contexts/TripContext';
 import { PageContentSidebarTrigger } from '@/components/layout/page-content-sidebar-trigger';
 import { MobileAuthHeader } from '@/components/layout/mobile-auth-header';
 
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
-  // subsets: ['latin'], // Removed for diagnostics
-  display: 'swap', 
+  weights: ['400', '700'], // Explicitly define weights
+  display: 'swap',
+  // subsets: ['latin'], // Keep commented out as per previous attempts
 });
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
-  // subsets: ['latin'], // Removed for diagnostics
-  display: 'swap', 
+  weights: ['400'], // Explicitly define weight
+  display: 'swap',
+  // subsets: ['latin'], // Keep commented out as per previous attempts
 });
 
 export const metadata: Metadata = {
@@ -39,7 +41,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
-          <TripProvider> {/* Added TripProvider */}
+          <TripProvider>
             <SidebarProvider defaultOpen>
               <Sidebar className="border-r border-sidebar-border shadow-lg">
                 <SidebarHeader className="p-4">
