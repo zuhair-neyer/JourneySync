@@ -205,13 +205,15 @@ export default function ExpensesPage() {
   })).filter(item => item.total > 0);
   
   const chartConfig: ChartConfig = expenseCategories.reduce((config, category) => {
+    const IconComponent = categoryIcons[category];
     config[category] = {
       label: category,
       color: categoryColors[category] || 'hsl(var(--muted))',
-      icon: categoryIcons[category]
+      icon: IconComponent ? IconComponent : undefined
     };
     return config;
   }, {} as ChartConfig);
+
 
   return (
     <div className="container mx-auto p-4 md:p-8">
@@ -323,28 +325,30 @@ export default function ExpensesPage() {
           <CardHeader>
             <CardTitle className="text-lg text-primary">Expenses by Category</CardTitle>
           </CardHeader>
-          <CardContent className="h-[200px]">
+          <CardContent className="h-[200px] pt-0"> {/* Adjusted padding-top */}
             {expenseDataForChart.length > 0 ? (
-               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                  <Pie
-                    data={expenseDataForChart}
-                    dataKey="total"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    labelLine={false}
-                    label={({ name, percent }: PieLabelRenderProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
-                  >
-                    {expenseDataForChart.map((entry) => (
-                      <Cell key={`cell-${entry.name}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <ChartContainer config={chartConfig} className="h-full w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                    <Pie
+                      data={expenseDataForChart}
+                      dataKey="total"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={60} // Adjusted radius
+                      labelLine={false}
+                      label={({ name, percent }: PieLabelRenderProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                    >
+                      {expenseDataForChart.map((entry) => (
+                        <Cell key={`cell-${entry.name}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <p className="text-muted-foreground text-center pt-10">No expense data for chart.</p>
             )}
@@ -471,3 +475,4 @@ export default function ExpensesPage() {
     </div>
   );
 }
+
