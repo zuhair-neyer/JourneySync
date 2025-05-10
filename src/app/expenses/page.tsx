@@ -9,10 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, PieChartIcon, Download, Bell, CreditCard } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, PieChartIcon as LucidePieChartIcon, Download, Bell, CreditCard } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Pie, Cell, PieLabelRenderProps } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Pie, Cell, PieLabelRenderProps, PieChart } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { useToast } from "@/hooks/use-toast";
 
@@ -336,7 +336,7 @@ export default function ExpensesPage() {
                     cy="50%"
                     outerRadius={80}
                     labelLine={false}
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    label={({ name, percent }: PieLabelRenderProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
                   >
                     {expenseDataForChart.map((entry) => (
                       <Cell key={`cell-${entry.name}`} fill={entry.fill} />
@@ -460,7 +460,7 @@ export default function ExpensesPage() {
           </Card>
           <Card className="shadow-md bg-card opacity-70 md:col-span-2">
               <CardHeader>
-                  <CardTitle className="text-lg text-primary flex items-center"><PieChartIcon className="mr-2 h-5 w-5"/>Group Budgeting</CardTitle>
+                  <CardTitle className="text-lg text-primary flex items-center"><LucidePieChartIcon className="mr-2 h-5 w-5"/>Group Budgeting</CardTitle>
               </CardHeader>
               <CardContent>
                   <p className="text-muted-foreground">Ability to set a trip budget and track spending against it is a feature we're working on.</p>
@@ -471,5 +471,3 @@ export default function ExpensesPage() {
     </div>
   );
 }
-
-    
