@@ -1,12 +1,14 @@
+
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/layout/sidebar-nav';
+import { AuthStatus } from '@/components/layout/auth-status';
 import { JourneySyncLogo } from '@/components/icons';
 import { Toaster } from "@/components/ui/toaster";
-import { Button } from '@/components/ui/button';
-import { Sun, Moon } from 'lucide-react'; // For theme toggle, optional
+import { AuthProvider } from '@/contexts/AuthContext';
+
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -31,30 +33,28 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <SidebarProvider defaultOpen>
-          <Sidebar className="border-r border-sidebar-border shadow-lg">
-            <SidebarHeader className="p-4">
-              <div className="flex items-center gap-2">
-                <JourneySyncLogo className="h-8 w-8 text-sidebar-primary" />
-                <h1 className="text-xl font-semibold text-sidebar-foreground">JourneySync</h1>
-              </div>
-              <SidebarTrigger className="ml-auto text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent" />
-            </SidebarHeader>
-            <SidebarContent>
-              <SidebarNav />
-            </SidebarContent>
-            {/* Optional Theme Toggle Example in Footer 
-            <SidebarFooter className="p-2">
-              <Button variant="ghost" className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-                <Sun className="mr-2 h-4 w-4" /> Light Mode
-              </Button>
-            </SidebarFooter>
-            */}
-          </Sidebar>
-          <SidebarInset>
-            {children}
-          </SidebarInset>
-        </SidebarProvider>
+        <AuthProvider>
+          <SidebarProvider defaultOpen>
+            <Sidebar className="border-r border-sidebar-border shadow-lg">
+              <SidebarHeader className="p-4">
+                <div className="flex items-center gap-2">
+                  <JourneySyncLogo className="h-8 w-8 text-sidebar-primary" />
+                  <h1 className="text-xl font-semibold text-sidebar-foreground">JourneySync</h1>
+                </div>
+                <SidebarTrigger className="ml-auto text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent" />
+              </SidebarHeader>
+              <SidebarContent>
+                <SidebarNav />
+              </SidebarContent>
+              <SidebarFooter className="p-2 border-t border-sidebar-border">
+                <AuthStatus />
+              </SidebarFooter>
+            </Sidebar>
+            <SidebarInset>
+              {children}
+            </SidebarInset>
+          </SidebarProvider>
+        </AuthProvider>
         <Toaster />
       </body>
     </html>
