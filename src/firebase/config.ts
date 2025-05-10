@@ -1,4 +1,3 @@
-
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { getAnalytics, Analytics } from "firebase/analytics";
@@ -10,7 +9,7 @@ import { getDatabase, Database } from "firebase/database";
 const firebaseConfig = {
   apiKey: "AIzaSyB8IXvNxMO7Eq1Y9vrZ5LRlUrjo12aS0FI",
   authDomain: "journeysync-94213.firebaseapp.com",
-  databaseURL: "https://journeysync-94213-default-rtdb.firebaseio.com",
+  databaseURL: "https://journeysync-94213-default-rtdb.firebaseio.com", // Removed trailing slash
   projectId: "journeysync-94213",
   storageBucket: "journeysync-94213.firebasestorage.app",
   messagingSenderId: "10311869905",
@@ -40,4 +39,3 @@ const database: Database = getDatabase(app); // Initialize Realtime Database
 // const db: Firestore = getFirestore(app); // Uncomment if you need Firestore
 
 export { app, auth, database, analytics /*, db */ };
-
