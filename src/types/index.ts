@@ -3,14 +3,14 @@ export interface TripMember {
   uid: string;
   name: string | null;
   email: string | null;
-  joinedAt: number | object; // Using object for ServerValue.TIMESTAMP
+  joinedAt: number; // Changed from number | object
 }
 
 export interface Trip {
   id: string;
   name:string;
   createdBy: string;
-  createdAt: number | object; // Using object for ServerValue.TIMESTAMP
+  createdAt: number; // Changed from number | object
   members: {
     [uid: string]: TripMember;
   };

@@ -1,8 +1,7 @@
-
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo } from '@/types';
-import { ref, push, set, get, child, update, serverTimestamp } from 'firebase/database';
+import { ref, push, set, get, child, update } from 'firebase/database'; // Removed serverTimestamp import
 import type { User as FirebaseUser } from 'firebase/auth';
 
 export async function createTripInDb(tripName: string, user: FirebaseUser): Promise<string | null> {
@@ -19,17 +18,19 @@ export async function createTripInDb(tripName: string, user: FirebaseUser): Prom
       console.error("Failed to generate trip ID.");
       return null;
     }
+    
+    const currentTime = Date.now();
 
     const newTripData: Omit<Trip, 'id'> = {
       name: tripName,
       createdBy: user.uid,
-      createdAt: serverTimestamp(),
+      createdAt: currentTime, // Replaced serverTimestamp()
       members: {
         [user.uid]: {
           uid: user.uid,
           name: user.displayName,
           email: user.email,
-          joinedAt: serverTimestamp(),
+          joinedAt: currentTime, // Replaced serverTimestamp()
         },
       },
     };
@@ -77,7 +78,7 @@ export async function joinTripInDb(tripId: string, user: FirebaseUser): Promise<
       uid: user.uid,
       name: user.displayName,
       email: user.email,
-      joinedAt: serverTimestamp(),
+      joinedAt: Date.now(), // Replaced serverTimestamp()
     };
 
     const updates: { [key: string]: any } = {};
