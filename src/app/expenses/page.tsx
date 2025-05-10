@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, PieChartIcon as LucidePieChartIcon, Download, Bell, CreditCard, CheckCircle, Send } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // DialogTrigger removed as it's not directly used for main dialog
+import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, Download, Bell, CreditCard, CheckCircle, Send, Target, PieChart as LucidePieChartIcon } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Pie, Cell, PieLabelRenderProps, PieChart } from 'recharts';
+import { Pie, Cell, PieLabelRenderProps, PieChart, ResponsiveContainer } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { useToast } from "@/hooks/use-toast";
+import { Progress } from "@/components/ui/progress";
 
 interface User {
   id: string;
@@ -76,9 +77,12 @@ export default function ExpensesPage() {
   const [totalGroupExpense, setTotalGroupExpense] = useState(0);
   const [settledStatus, setSettledStatus] = useState<Record<string, boolean>>({});
 
+  const [tripBudget, setTripBudget] = useState<number | null>(null);
+  const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
+  const [budgetInput, setBudgetInput] = useState<string>("");
+
 
   useEffect(() => {
-    // Initialize users - current user + mock users
     const mockUsers: User[] = [
       { id: 'user2', name: 'Alice Wonderland' },
       { id: 'user3', name: 'Bob The Builder' },
@@ -86,17 +90,17 @@ export default function ExpensesPage() {
     if (currentUser) {
       setUsers([{ id: currentUser.uid, name: currentUser.displayName || currentUser.email || 'Current User', email: currentUser.email }, ...mockUsers]);
     } else {
-      // Fallback if currentUser is not yet available or user is not logged in
       setUsers([{ id: 'user1', name: 'Guest User (You)'}, ...mockUsers]);
     }
     
-    // Load expenses from localStorage or API if needed
     const initialExpenses: Expense[] = [
         { id: '1', description: 'Group Dinner', amount: 120, currency: 'USD', category: 'Food', paidByUserId: currentUser?.uid || 'user1', date: '2024-07-20', participantIds: [currentUser?.uid || 'user1', 'user2', 'user3'] },
         { id: '2', description: 'Museum Tickets', amount: 45, currency: 'USD', category: 'Activities', paidByUserId: 'user2', date: '2024-07-21', participantIds: [currentUser?.uid || 'user1', 'user2'] },
     ];
     setExpenses(initialExpenses);
-
+    // Simulate loading saved budget
+    // setTripBudget(1000); 
+    // setBudgetInput("1000");
   }, [currentUser]);
 
   const calculateBalancesAndTotal = useCallback(() => {
@@ -143,6 +147,16 @@ export default function ExpensesPage() {
     calculateBalancesAndTotal();
   }, [expenses, users, calculateBalancesAndTotal, settledStatus]);
 
+  useEffect(() => {
+    if (tripBudget !== null && totalGroupExpense > tripBudget) {
+      toast({
+        variant: "destructive",
+        title: "Budget Exceeded",
+        description: `The group has spent ${totalGroupExpense.toFixed(2)}, exceeding the budget of ${tripBudget.toFixed(2)}.`,
+      });
+    }
+  }, [totalGroupExpense, tripBudget, toast]);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -177,12 +191,6 @@ export default function ExpensesPage() {
       setExpenses([...expenses, { ...currentExpense, id: Date.now().toString() } as Expense]);
       toast({ title: "Success", description: "Expense added." });
     }
-    // Reset settled status if expenses change, as balances will be different.
-    // This is a simple approach; a more complex app might only reset relevant users.
-    // setSettledStatus({}); 
-    // ^ Decided against auto-resetting settled status for now to keep user's manual "settled" action persistent.
-    // If balances become non-zero after being settled, the UI will reflect they owe again.
-
     setIsExpenseDialogOpen(false);
     setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id) }); 
     setEditingExpenseId(null);
@@ -197,12 +205,10 @@ export default function ExpensesPage() {
   const handleDeleteExpense = (id: string) => {
     setExpenses(expenses.filter(exp => exp.id !== id));
     toast({ title: "Success", description: "Expense deleted." });
-     // Similar to add/edit, consider if settled status needs reset.
-    // setSettledStatus({});
   };
 
   const openNewExpenseDialog = () => {
-    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id) });
+    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id), date: new Date().toISOString().split('T')[0] });
     setEditingExpenseId(null);
     setIsExpenseDialogOpen(true);
   };
@@ -212,6 +218,30 @@ export default function ExpensesPage() {
     const userName = users.find(u => u.id === userIdToSettle)?.name || 'User';
     toast({ title: "Success", description: `${userName}'s balance marked as settled.` });
   };
+
+  const handleOpenBudgetDialog = () => {
+    setBudgetInput(tripBudget?.toString() || "");
+    setIsBudgetDialogOpen(true);
+  };
+
+  const handleSaveBudget = () => {
+    const newBudget = parseFloat(budgetInput);
+    if (isNaN(newBudget) || newBudget < 0) {
+      toast({ variant: "destructive", title: "Invalid Budget", description: "Please enter a valid positive number for the budget." });
+      return;
+    }
+    setTripBudget(newBudget);
+    toast({ title: "Success", description: `Trip budget set to ${newBudget.toFixed(2)}.` });
+    setIsBudgetDialogOpen(false);
+  };
+
+  const handleDownloadReport = () => {
+    toast({ title: "Feature Coming Soon", description: "A downloadable expense report will be available in a future update." });
+    // Placeholder for actual report generation logic
+    // Example: const reportData = generateReport(expenses, balances, users, tripBudget);
+    // downloadFile(reportData, 'expense_report.csv', 'text/csv');
+  };
+
 
   const expenseDataForChart = expenseCategories.map(category => ({
     name: category,
@@ -230,6 +260,8 @@ export default function ExpensesPage() {
     };
     return config;
   }, {} as ChartConfig);
+
+  const budgetProgress = tripBudget && tripBudget > 0 ? (totalGroupExpense / tripBudget) * 100 : 0;
 
 
   return (
@@ -325,7 +357,33 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-card">
+            <DialogHeader>
+                <DialogTitle className="text-primary">Set Trip Budget</DialogTitle>
+                <DialogDescription>
+                    Enter the total budget for this trip. You'll be alerted if spending exceeds this amount.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <Label htmlFor="budgetAmount">Budget Amount ({expenses.length > 0 ? expenses[0].currency : 'USD'})</Label>
+                <Input 
+                    id="budgetAmount" 
+                    type="number" 
+                    value={budgetInput} 
+                    onChange={(e) => setBudgetInput(e.target.value)} 
+                    placeholder="e.g., 1000" 
+                    className="bg-background"
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsBudgetDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSaveBudget} className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Budget</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card className="shadow-md bg-card">
           <CardHeader>
             <CardTitle className="text-lg text-primary">Total Group Expenses</CardTitle>
@@ -335,7 +393,33 @@ export default function ExpensesPage() {
             <p className="text-xs text-muted-foreground"> (Assumes all expenses are in the first expense's currency or manually converted by user)</p>
           </CardContent>
         </Card>
-         <Card className="md:col-span-2 shadow-md bg-card">
+        <Card className="shadow-md bg-card">
+            <CardHeader>
+                <CardTitle className="text-lg text-primary flex items-center"><Target className="mr-2"/>Trip Budget</CardTitle>
+            </CardHeader>
+            <CardContent>
+                {tripBudget !== null ? (
+                    <>
+                        <p className="text-2xl font-bold">{tripBudget.toFixed(2)} <span className="text-sm text-muted-foreground">{expenses.length > 0 ? expenses[0].currency : 'USD'}</span></p>
+                        <Progress value={budgetProgress} className="mt-2 h-3" />
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Spent: {totalGroupExpense.toFixed(2)} ({budgetProgress.toFixed(1)}%)
+                        </p>
+                        {totalGroupExpense > tripBudget && (
+                            <p className="text-xs text-destructive font-semibold mt-1">Budget exceeded!</p>
+                        )}
+                    </>
+                ) : (
+                    <p className="text-muted-foreground">No budget set yet.</p>
+                )}
+            </CardContent>
+            <CardFooter>
+                <Button variant="outline" size="sm" onClick={handleOpenBudgetDialog}>
+                    {tripBudget !== null ? 'Edit Budget' : 'Set Budget'}
+                </Button>
+            </CardFooter>
+        </Card>
+         <Card className="shadow-md bg-card md:col-start-3 lg:col-start-auto">
           <CardHeader>
             <CardTitle className="text-lg text-primary">Expenses by Category</CardTitle>
           </CardHeader>
@@ -359,7 +443,7 @@ export default function ExpensesPage() {
                         <Cell key={`cell-${entry.name}`} fill={entry.fill} />
                       ))}
                     </Pie>
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: '0.75rem', paddingTop: '10px' }}/>
                   </PieChart>
                 </ResponsiveContainer>
               </ChartContainer>
@@ -373,7 +457,7 @@ export default function ExpensesPage() {
       <Card className="mb-8 shadow-lg bg-card">
         <CardHeader>
           <CardTitle className="text-xl text-primary flex items-center"><Users className="mr-2" /> User Balances</CardTitle>
-          <CardDescription>Summary of who owes money or is owed money within the group. All calculations assume equal splits for now.</CardDescription>
+          <CardDescription>Summary of who owes money or is owed money. "Mark as Settled" helps track when debts are cleared.</CardDescription>
         </CardHeader>
         <CardContent>
           {balances.length > 0 ? (
@@ -400,12 +484,12 @@ export default function ExpensesPage() {
                           variant="outline"
                           className="mt-1 text-xs h-auto py-1 px-2"
                         >
-                          Mark as Settled
+                           <CheckCircle className="w-3 h-3 mr-1" /> Mark as Settled
                         </Button>
                       )}
                        {balance.netBalance > 0 && !balance.isSettled && (
                          <Button
-                            onClick={() => alert(`Reminder to ${balance.userName} to settle up!`)} // Placeholder for actual notification/payment
+                            onClick={() => toast({ title: "Reminder Sent (Simulation)", description: `A reminder to ${balance.userName} to settle up could be sent here.`})}
                             size="sm"
                             variant="outline"
                             className="mt-1 text-xs h-auto py-1 px-2 border-primary text-primary hover:bg-primary/10"
@@ -423,8 +507,14 @@ export default function ExpensesPage() {
           )}
         </CardContent>
       </Card>
-
-      <h2 className="text-2xl font-semibold text-primary mb-4">All Expenses</h2>
+      
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-semibold text-primary">All Expenses</h2>
+        <Button variant="outline" onClick={handleDownloadReport}>
+            <Download className="mr-2 h-4 w-4" /> Download Report
+        </Button>
+      </div>
+      
       {expenses.length === 0 && (
          <Card className="text-center p-8 shadow-md bg-card">
             <CardHeader>
@@ -484,30 +574,15 @@ export default function ExpensesPage() {
               <CardContent>
                   <p className="text-muted-foreground">Real-time notifications for new expenses, payments, overdue alerts and currency conversion are planned for a future update.</p>
                    <p className="mt-2 text-xs text-muted-foreground">Overdue alerts for unsettled balances will also be part of this system.</p>
+                   <p className="mt-2 text-xs text-muted-foreground">You will also be notified if trip spending exceeds the set budget.</p>
               </CardContent>
           </Card>
           <Card className="shadow-md bg-card opacity-70">
               <CardHeader>
-                  <CardTitle className="text-lg text-primary flex items-center"><Send className="mr-2 h-5 w-5"/>Payment Tracking</CardTitle>
+                  <CardTitle className="text-lg text-primary flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Currency Features</CardTitle>
               </CardHeader>
               <CardContent>
-                  <p className="text-muted-foreground">Feature to track payments between users and mark balances as settled is coming soon. This will allow users to record when they've paid someone back.</p>
-              </CardContent>
-          </Card>
-          <Card className="shadow-md bg-card opacity-70">
-              <CardHeader>
-                  <CardTitle className="text-lg text-primary flex items-center"><Download className="mr-2 h-5 w-5"/>Final Report</CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <p className="text-muted-foreground">A downloadable summary report of all expenses, splits, and payments will be available in a future version.</p>
-              </CardContent>
-          </Card>
-          <Card className="shadow-md bg-card opacity-70">
-              <CardHeader>
-                  <CardTitle className="text-lg text-primary flex items-center"><LucidePieChartIcon className="mr-2 h-5 w-5"/>Group Budgeting</CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <p className="text-muted-foreground">Ability to set a trip budget and track spending against it is a feature we're working on. The group will be alerted if they are nearing or exceeding the budget.</p>
+                  <p className="text-muted-foreground">Advanced currency conversion and handling multiple currencies for expenses are planned for future enhancements.</p>
               </CardContent>
           </Card>
        </div>
