@@ -17,14 +17,14 @@ const geistSans = Geist({
   variable: '--font-geist-sans',
   weights: ['400', '700'], // Explicitly define weights
   display: 'swap',
-  // subsets: ['latin'], // Keep commented out as per previous attempts
+  subsets: ['latin'],
 });
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   weights: ['400'], // Explicitly define weight
   display: 'swap',
-  // subsets: ['latin'], // Keep commented out as per previous attempts
+  subsets: ['latin'],
 });
 
 export const metadata: Metadata = {
