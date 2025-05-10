@@ -2,12 +2,12 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // typescript: {
+  //   ignoreBuildErrors: true, // Removing to enforce type checking
+  // },
+  // eslint: {
+  //   ignoreDuringBuilds: true, // Removing to enforce linting
+  // },
   images: {
     remotePatterns: [
       {
