@@ -8,6 +8,7 @@ import { AuthStatus } from '@/components/layout/auth-status';
 import { JourneySyncLogo } from '@/components/icons';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/contexts/AuthContext';
+import { PageContentSidebarTrigger } from '@/components/layout/page-content-sidebar-trigger';
 
 
 const geistSans = Geist({
@@ -51,6 +52,7 @@ export default function RootLayout({
               </SidebarFooter>
             </Sidebar>
             <SidebarInset>
+              <PageContentSidebarTrigger />
               {children}
             </SidebarInset>
           </SidebarProvider>
@@ -60,3 +62,4 @@ export default function RootLayout({
     </html>
   );
 }
+
