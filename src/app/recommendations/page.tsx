@@ -1,7 +1,8 @@
+
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useFormState } from 'react-dom';
+import React, { useState, useEffect, useActionState } from 'react';
+// useFormState was removed as it's now imported directly from 'react'
 import { getSmartRecommendations, SmartRecommendationsInput, SmartRecommendationsOutput } from '@/ai/flows/smart-recommendations';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +42,7 @@ async function handleSubmit(_prevState: any, formData: FormData): Promise<{ reco
 
 
 export default function RecommendationsPage() {
-  const [state, formAction] = useFormState(handleSubmit, initialState);
+  const [state, formAction] = useActionState(handleSubmit, initialState);
   const { toast } = useToast();
   const [mounted, setMounted] = useState(false);
 
@@ -174,3 +175,4 @@ export default function RecommendationsPage() {
     </div>
   );
 }
+
