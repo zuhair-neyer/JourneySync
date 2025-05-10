@@ -1,6 +1,5 @@
-
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Inter, Roboto_Mono } from 'next/font/google';
 import './globals.css';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarTrigger, SidebarContent, SidebarFooter, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/layout/sidebar-nav';
@@ -12,19 +11,18 @@ import { TripProvider } from '@/contexts/TripContext';
 import { PageContentSidebarTrigger } from '@/components/layout/page-content-sidebar-trigger';
 import { MobileAuthHeader } from '@/components/layout/mobile-auth-header';
 
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  weights: ['400', '700'], // Explicitly define weights
-  display: 'swap',
+const inter = Inter({
   subsets: ['latin'],
+  variable: '--font-inter',
+  weight: ['400', '700'],
+  display: 'swap',
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  weights: ['400'], // Explicitly define weight
-  display: 'swap',
+const roboto_mono = Roboto_Mono({
   subsets: ['latin'],
+  variable: '--font-roboto-mono',
+  weight: ['400'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -39,7 +37,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${inter.variable} ${roboto_mono.variable} antialiased`}>
         <AuthProvider>
           <TripProvider>
             <SidebarProvider defaultOpen>
