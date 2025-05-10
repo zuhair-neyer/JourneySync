@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListChecks, MapPin, Sparkles, Luggage, UsersRound } from "lucide-react";
@@ -48,8 +49,9 @@ export default function DashboardPage() {
       </div>
 
       <footer className="mt-16 text-center text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} JourneySync. Adventure awaits!</p>
+        <p>&copy; {new Date().getFullYear()} JourneySync. Adventure awaits! Created by Zuhair Mumtaz.</p>
       </footer>
     </div>
   );
 }
+
