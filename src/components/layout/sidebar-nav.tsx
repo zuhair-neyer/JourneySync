@@ -1,8 +1,9 @@
+
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListChecks, MapPin, Sparkles, Luggage, UsersRound, Home } from "lucide-react";
+import { ListChecks, MapPin, Sparkles, Luggage, UsersRound, Home, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   SidebarMenu,
@@ -17,6 +18,7 @@ const navItems = [
   { href: "/recommendations", label: "Recommendations", icon: Sparkles },
   { href: "/packing-list", label: "Packing List", icon: Luggage },
   { href: "/polls", label: "Group Polls", icon: UsersRound },
+  { href: "/expenses", label: "Expenses", icon: DollarSign },
 ];
 
 export function SidebarNav() {
@@ -46,3 +48,6 @@ export function SidebarNav() {
     </SidebarMenu>
   );
 }
+
+
+    

@@ -1,7 +1,8 @@
 
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListChecks, MapPin, Sparkles, Luggage, UsersRound } from "lucide-react";
+import { ListChecks, MapPin, Sparkles, Luggage, UsersRound, DollarSign } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -12,6 +13,7 @@ export default function DashboardPage() {
     { name: "Smart Recommendations", icon: Sparkles, href: "/recommendations", description: "Get AI-powered local suggestions." },
     { name: "Packing Checklist", icon: Luggage, href: "/packing-list", description: "Create and manage your packing lists." },
     { name: "Group Polls", icon: UsersRound, href: "/polls", description: "Make group decisions easily." },
+    { name: "Expense Tracking", icon: DollarSign, href: "/expenses", description: "Manage shared expenses and track balances." },
   ];
 
   return (
@@ -55,3 +57,5 @@ export default function DashboardPage() {
   );
 }
 
+
+    
