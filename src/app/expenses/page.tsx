@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, PieChartIcon as LucidePieChartIcon, Download, Bell, CreditCard, CheckCircle } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, PieChartIcon as LucidePieChartIcon, Download, Bell, CreditCard, CheckCircle, Send } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Pie, Cell, PieLabelRenderProps, PieChart } from 'recharts';
@@ -403,6 +403,16 @@ export default function ExpensesPage() {
                           Mark as Settled
                         </Button>
                       )}
+                       {balance.netBalance > 0 && !balance.isSettled && (
+                         <Button
+                            onClick={() => alert(`Reminder to ${balance.userName} to settle up!`)} // Placeholder for actual notification/payment
+                            size="sm"
+                            variant="outline"
+                            className="mt-1 text-xs h-auto py-1 px-2 border-primary text-primary hover:bg-primary/10"
+                        >
+                            <Send className="w-3 h-3 mr-1" /> Remind
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -473,6 +483,15 @@ export default function ExpensesPage() {
               </CardHeader>
               <CardContent>
                   <p className="text-muted-foreground">Real-time notifications for new expenses, payments, overdue alerts and currency conversion are planned for a future update.</p>
+                   <p className="mt-2 text-xs text-muted-foreground">Overdue alerts for unsettled balances will also be part of this system.</p>
+              </CardContent>
+          </Card>
+          <Card className="shadow-md bg-card opacity-70">
+              <CardHeader>
+                  <CardTitle className="text-lg text-primary flex items-center"><Send className="mr-2 h-5 w-5"/>Payment Tracking</CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <p className="text-muted-foreground">Feature to track payments between users and mark balances as settled is coming soon. This will allow users to record when they've paid someone back.</p>
               </CardContent>
           </Card>
           <Card className="shadow-md bg-card opacity-70">
@@ -483,12 +502,12 @@ export default function ExpensesPage() {
                   <p className="text-muted-foreground">A downloadable summary report of all expenses, splits, and payments will be available in a future version.</p>
               </CardContent>
           </Card>
-          <Card className="shadow-md bg-card opacity-70 md:col-span-2">
+          <Card className="shadow-md bg-card opacity-70">
               <CardHeader>
                   <CardTitle className="text-lg text-primary flex items-center"><LucidePieChartIcon className="mr-2 h-5 w-5"/>Group Budgeting</CardTitle>
               </CardHeader>
               <CardContent>
-                  <p className="text-muted-foreground">Ability to set a trip budget and track spending against it is a feature we're working on.</p>
+                  <p className="text-muted-foreground">Ability to set a trip budget and track spending against it is a feature we're working on. The group will be alerted if they are nearing or exceeding the budget.</p>
               </CardContent>
           </Card>
        </div>
