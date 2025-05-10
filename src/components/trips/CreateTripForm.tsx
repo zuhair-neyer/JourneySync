@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -33,7 +32,14 @@ export function CreateTripForm() {
 
     setIsLoading(true);
     setCreatedTripId(null);
-    const newTripId = await createTripInDb(tripName, currentUser);
+
+    const basicUserInfo = {
+      uid: currentUser.uid,
+      displayName: currentUser.displayName,
+      email: currentUser.email,
+    };
+
+    const newTripId = await createTripInDb(tripName, basicUserInfo);
     setIsLoading(false);
 
     if (newTripId) {

@@ -1,10 +1,16 @@
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo } from '@/types';
-import { ref, push, set, get, child, update } from 'firebase/database'; // Removed serverTimestamp import
-import type { User as FirebaseUser } from 'firebase/auth';
+import { ref, push, set, get, child, update } from 'firebase/database';
 
-export async function createTripInDb(tripName: string, user: FirebaseUser): Promise<string | null> {
+// Define a simpler interface for user information passed to server actions
+interface BasicUserInfo {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+}
+
+export async function createTripInDb(tripName: string, userInfo: BasicUserInfo): Promise<string | null> {
   if (!tripName.trim()) {
     console.error("Trip name cannot be empty.");
     return null;
@@ -23,14 +29,14 @@ export async function createTripInDb(tripName: string, user: FirebaseUser): Prom
 
     const newTripData: Omit<Trip, 'id'> = {
       name: tripName,
-      createdBy: user.uid,
-      createdAt: currentTime, // Replaced serverTimestamp()
+      createdBy: userInfo.uid,
+      createdAt: currentTime,
       members: {
-        [user.uid]: {
-          uid: user.uid,
-          name: user.displayName,
-          email: user.email,
-          joinedAt: currentTime, // Replaced serverTimestamp()
+        [userInfo.uid]: {
+          uid: userInfo.uid,
+          name: userInfo.displayName,
+          email: userInfo.email,
+          joinedAt: currentTime,
         },
       },
     };
@@ -38,12 +44,12 @@ export async function createTripInDb(tripName: string, user: FirebaseUser): Prom
     await set(newTripRef, newTripData);
 
     // Add trip to user's list of trips
-    const userTripRef = ref(database, `users/${user.uid}/trips/${tripId}`);
-    const userTripInfo: Omit<UserTripInfo, 'id'> = {
+    const userTripRef = ref(database, `users/${userInfo.uid}/trips/${tripId}`);
+    const userTripInfoData: Omit<UserTripInfo, 'id'> = { // Renamed to avoid conflict with type
       name: tripName,
       role: 'creator',
     };
-    await set(userTripRef, userTripInfo);
+    await set(userTripRef, userTripInfoData);
 
     return tripId;
   } catch (error) {
@@ -52,7 +58,7 @@ export async function createTripInDb(tripName: string, user: FirebaseUser): Prom
   }
 }
 
-export async function joinTripInDb(tripId: string, user: FirebaseUser): Promise<boolean> {
+export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Promise<boolean> {
   if (!tripId.trim()) {
     console.error("Trip ID cannot be empty.");
     return false;
@@ -69,21 +75,21 @@ export async function joinTripInDb(tripId: string, user: FirebaseUser): Promise<
     const tripData = tripSnapshot.val() as Trip;
 
     // Check if user is already a member
-    if (tripData.members && tripData.members[user.uid]) {
+    if (tripData.members && tripData.members[userInfo.uid]) {
       console.log("User is already a member of this trip.");
-      return true; // Or false if we want to indicate no change was made
+      return true; 
     }
     
     const memberData: TripMember = {
-      uid: user.uid,
-      name: user.displayName,
-      email: user.email,
-      joinedAt: Date.now(), // Replaced serverTimestamp()
+      uid: userInfo.uid,
+      name: userInfo.displayName,
+      email: userInfo.email,
+      joinedAt: Date.now(),
     };
 
     const updates: { [key: string]: any } = {};
-    updates[`/trips/${tripId}/members/${user.uid}`] = memberData;
-    updates[`/users/${user.uid}/trips/${tripId}`] = {
+    updates[`/trips/${tripId}/members/${userInfo.uid}`] = memberData;
+    updates[`/users/${userInfo.uid}/trips/${tripId}`] = {
       name: tripData.name,
       role: 'member',
     };

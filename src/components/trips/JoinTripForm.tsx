@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -31,7 +30,12 @@ export function JoinTripForm() {
     }
 
     setIsLoading(true);
-    const success = await joinTripInDb(tripId, currentUser);
+    const basicUserInfo = {
+      uid: currentUser.uid,
+      displayName: currentUser.displayName,
+      email: currentUser.email,
+    };
+    const success = await joinTripInDb(tripId, basicUserInfo);
     setIsLoading(false);
 
     if (success) {
