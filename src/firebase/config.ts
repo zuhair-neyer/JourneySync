@@ -1,26 +1,43 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
+import { getAnalytics, Analytics } from "firebase/analytics";
+import { getDatabase, Database } from "firebase/database";
 // import { getFirestore, Firestore } from 'firebase/firestore'; // Uncomment if you need Firestore
 
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyB8IXvNxMO7Eq1Y9vrZ5LRlUrjo12aS0FI",
+  authDomain: "journeysync-94213.firebaseapp.com",
+  databaseURL: "https://journeysync-94213-default-rtdb.firebaseio.com",
+  projectId: "journeysync-94213",
+  storageBucket: "journeysync-94213.firebasestorage.app",
+  messagingSenderId: "10311869905",
+  appId: "1:10311869905:web:a3e3585e4267e27b922cf0",
+  measurementId: "G-G6Y1LEJXYR"
 };
 
 // Initialize Firebase
 let app: FirebaseApp;
+let analytics: Analytics | undefined;
+
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
+  if (typeof window !== "undefined") {
+    analytics = getAnalytics(app);
+  }
 } else {
   app = getApp();
+  if (typeof window !== "undefined") {
+    // getAnalytics will return existing instance or initialize if not present for the app
+    analytics = getAnalytics(app);
+  }
 }
 
 const auth: Auth = getAuth(app);
+const database: Database = getDatabase(app); // Initialize Realtime Database
 // const db: Firestore = getFirestore(app); // Uncomment if you need Firestore
 
-export { app, auth /*, db */ };
+export { app, auth, database, analytics /*, db */ };
+
