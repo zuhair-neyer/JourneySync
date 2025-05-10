@@ -9,7 +9,10 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +23,7 @@ interface AuthContextType {
   error: string | null;
   setError: Dispatch<SetStateAction<string | null>>;
   signUp: (email: string, password: string) => Promise<FirebaseUser | null>;
-  logIn: (email: string, password: string) => Promise<FirebaseUser | null>;
+  logIn: (email: string, password: string, rememberMe?: boolean) => Promise<FirebaseUser | null>;
   logOut: () => Promise<void>;
 }
 
@@ -57,6 +60,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setLoading(true);
     setError(null);
     try {
+      // For sign-up, typically local persistence is desired for a good UX.
+      await setPersistence(auth, browserLocalPersistence);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       setCurrentUser(userCredential.user);
       toast({ title: "Success", description: "Account created successfully!" });
@@ -72,10 +77,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const logIn = async (email: string, password: string): Promise<FirebaseUser | null> => {
+  const logIn = async (email: string, password: string, rememberMe: boolean = true): Promise<FirebaseUser | null> => {
     setLoading(true);
     setError(null);
     try {
+      const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+      await setPersistence(auth, persistenceType);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       setCurrentUser(userCredential.user);
       toast({ title: "Success", description: "Logged in successfully!" });
