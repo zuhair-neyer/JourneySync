@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { ReactNode, Dispatch, SetStateAction } from 'react';
@@ -39,34 +38,31 @@ export function TripProvider({ children }: TripProviderProps) {
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [isLoadingSelectedTrip, setIsLoadingSelectedTrip] = useState(false);
 
-  const fetchUserTrips = useCallback(async (user: FirebaseUser) => {
-    setIsLoadingUserTrips(true);
-    try {
-      const trips = await getUserTripsFromDb(user.uid);
-      setUserTrips(trips);
-    } catch (error) {
-      console.error("Failed to fetch user trips:", error);
-      setUserTrips([]); // Set to empty array on error
-    } finally {
-      setIsLoadingUserTrips(false);
-    }
-  }, []);
+  const currentUid = currentUser?.uid;
 
-  const refreshUserTrips = useCallback(() => {
-    if (currentUser) {
-      fetchUserTrips(currentUser);
-    }
-  }, [currentUser, fetchUserTrips]);
-
+  // Effect for fetching user trips
   useEffect(() => {
-    if (currentUser) {
-      fetchUserTrips(currentUser);
+    if (currentUid) {
+      const loadUserTrips = async () => {
+        setIsLoadingUserTrips(true);
+        try {
+          const trips = await getUserTripsFromDb(currentUid);
+          setUserTrips(trips);
+        } catch (error) {
+          console.error("Failed to fetch user trips:", error);
+          setUserTrips([]);
+        } finally {
+          setIsLoadingUserTrips(false);
+        }
+      };
+      loadUserTrips();
     } else {
       setUserTrips([]);
-      setSelectedTripId(null);
+      setSelectedTripId(null); // Clear selected trip if user logs out
     }
-  }, [currentUser, fetchUserTrips]);
+  }, [currentUid]); // Depend only on currentUid
 
+  // Effect for fetching selected trip details
   useEffect(() => {
     const fetchSelectedTripDetails = async () => {
       if (!selectedTripId) {
@@ -87,6 +83,25 @@ export function TripProvider({ children }: TripProviderProps) {
 
     fetchSelectedTripDetails();
   }, [selectedTripId]);
+
+  const refreshUserTrips = useCallback(() => {
+    if (currentUid) {
+      const doRefresh = async () => {
+        setIsLoadingUserTrips(true);
+        try {
+          const trips = await getUserTripsFromDb(currentUid);
+          setUserTrips(trips);
+        } catch (error) {
+          console.error("Failed to fetch user trips on refresh:", error);
+          // Optionally keep existing trips on refresh error, or clear:
+          // setUserTrips([]); 
+        } finally {
+          setIsLoadingUserTrips(false);
+        }
+      };
+      doRefresh();
+    }
+  }, [currentUid]);
 
   const value = {
     userTrips,
