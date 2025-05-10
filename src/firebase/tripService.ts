@@ -62,7 +62,11 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
 
     return tripId;
   } catch (error) {
-    console.error("[tripService] Error creating trip. Raw error object logged below.");
+    // IMPORTANT: Check your SERVER-SIDE console logs for the detailed Firebase error message below.
+    // This will provide the specific reason for the failure (e.g., permission denied due to Firebase rules).
+    console.error("----------------------------------------------------------------------------------");
+    console.error("[tripService] ERROR CREATING TRIP. Detailed Firebase error object logged below:");
+    console.error("----------------------------------------------------------------------------------");
     console.error(error); 
 
     if (error instanceof Error) {
@@ -78,6 +82,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     } else {
         console.error("[tripService] Caught a non-Error object during trip creation:", String(error));
     }
+    console.error("----------------------------------------------------------------------------------");
     return null;
   }
 }
@@ -136,7 +141,10 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     console.log("[tripService] Successfully joined trip:", tripId);
     return true;
   } catch (error) {
-    console.error("[tripService] Error joining trip. Raw error object logged below. TripID:", tripId);
+    // IMPORTANT: Check your SERVER-SIDE console logs for the detailed Firebase error message below.
+    console.error("---------------------------------------------------------------------------------");
+    console.error("[tripService] ERROR JOINING TRIP. Detailed Firebase error object logged below. TripID:", tripId);
+    console.error("---------------------------------------------------------------------------------");
     console.error(error);
 
     if (error instanceof Error) {
@@ -152,6 +160,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     } else {
         console.error("[tripService] Caught a non-Error object during trip joining:", String(error));
     }
+    console.error("---------------------------------------------------------------------------------");
     return false;
   }
 }
@@ -217,5 +226,3 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     return null;
   }
 }
-
-    
