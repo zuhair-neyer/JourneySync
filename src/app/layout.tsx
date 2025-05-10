@@ -14,20 +14,23 @@ import { MobileAuthHeader } from '@/components/layout/mobile-auth-header';
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
-  weight: ['400', '700'],
-  display: 'swap',
+  display: 'swap', // Added display: 'swap'
 });
 
 const roboto_mono = Roboto_Mono({
   subsets: ['latin'],
   variable: '--font-roboto-mono',
-  weight: ['400'],
-  display: 'swap',
+  display: 'swap', // Added display: 'swap'
 });
 
 export const metadata: Metadata = {
   title: 'JourneySync - Collaborative Travel Planner',
   description: 'Plan your trips collaboratively with JourneySync. Features include shared itineraries, expense tracking, interactive maps, and smart recommendations.',
+  // Removing default favicon link, browser will request /favicon.ico by default.
+  // If a custom favicon is desired, it should be placed in public/favicon.ico
+  // icons: {
+  //   icon: '/favicon.ico', // Example, ensure file exists in public folder
+  // },
 };
 
 export default function RootLayout({
@@ -37,6 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      {/* Removed any explicit link to /www/vscode-theme.css from head */}
       <body className={`${inter.variable} ${roboto_mono.variable} antialiased`}>
         <AuthProvider>
           <TripProvider>
@@ -69,4 +73,3 @@ export default function RootLayout({
     </html>
   );
 }
-

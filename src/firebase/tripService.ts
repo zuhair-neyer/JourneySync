@@ -1,7 +1,7 @@
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo } from '@/types';
-import { ref, push, set, get, child, update } from 'firebase/database';
+import { ref, push, set, get, child, update, serverTimestamp } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
 interface BasicUserInfo {
@@ -27,27 +27,28 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
 
   try {
     const tripsRef = ref(database, 'trips');
-    const newTripRef = push(tripsRef);
+    const newTripRef = push(tripsRef); // Generates a new unique key for the trip
     const tripId = newTripRef.key;
 
     if (!tripId) {
       console.error("[tripService] CRITICAL: Failed to generate trip ID from Firebase push. newTripRef.key is null.");
+      // This should theoretically not happen with Firebase RTDB push()
       return null;
     }
     console.log("[tripService] Generated tripId:", tripId);
     
-    const currentTime = Date.now();
+    const currentTime = Date.now(); // Using client-side timestamp for simplicity, serverTimestamp() for consistency
 
     const newTripData: Omit<Trip, 'id'> = {
       name: tripName,
       createdBy: userInfo.uid,
-      createdAt: currentTime,
+      createdAt: currentTime, // Consider serverTimestamp() if clock skew is a concern
       members: {
         [userInfo.uid]: {
           uid: userInfo.uid,
-          name: userInfo.displayName ?? "Anonymous", 
+          name: userInfo.displayName ?? "Anonymous User", 
           email: userInfo.email,
-          joinedAt: currentTime,
+          joinedAt: currentTime, // Consider serverTimestamp()
         },
       },
     };
@@ -55,8 +56,9 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     await set(newTripRef, newTripData);
     console.log("[tripService] Successfully set trip data in /trips/", tripId);
 
+    // Add trip to user's list of trips
     const userTripRef = ref(database, `users/${userInfo.uid}/trips/${tripId}`);
-    const userTripInfoData: Omit<UserTripInfo, 'id'> = {
+    const userTripInfoData: Omit<UserTripInfo, 'id'> = { // id is the tripId itself
       name: tripName,
       role: 'creator',
     };
@@ -66,24 +68,24 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
 
     console.log("[tripService] createTripInDb SUCCEEDED for tripId:", tripId);
     return tripId;
-  } catch (error) {
+  } catch (error: any) {
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error("!           SERVER-SIDE ERROR WHILE CREATING TRIP                                !");
-    if (error instanceof Error) {
-        const firebaseErrorCode = (error as any).code;
-        console.error(`[tripService] Error: ${error.message} (Code: ${firebaseErrorCode || 'N/A'})`);
-        if (firebaseErrorCode === 'PERMISSION_DENIED') {
-            console.error("##################################################################################");
-            console.error("#                                PERMISSION DENIED!                                #");
-            console.error("# CHECK YOUR FIREBASE REALTIME DATABASE RULES.                                     #");
-            console.error("# Ensure authenticated users have write access to:                                 #");
-            console.error("#   - /trips/{newTripId}                                                           #");
-            console.error("#   - /users/" + userInfo.uid + "/trips/{newTripId}                               #");
-            console.error("# Development rules example: { \"rules\": { \".read\": \"auth != null\", \".write\": \"auth != null\" } } #");
-            console.error("##################################################################################");
-        }
+    const firebaseErrorCode = error.code;
+    const firebaseErrorMessage = error.message;
+    console.error(`[tripService] Error: ${firebaseErrorMessage} (Code: ${firebaseErrorCode || 'N/A'})`);
+    
+    if (firebaseErrorCode === 'PERMISSION_DENIED') {
+        console.error("##################################################################################");
+        console.error("#                                PERMISSION DENIED!                                #");
+        console.error("# CHECK YOUR FIREBASE REALTIME DATABASE RULES.                                     #");
+        console.error("# Ensure authenticated users have write access to relevant paths:                  #");
+        console.error("#   - /trips/{newGeneratedTripId}                                                  #");
+        console.error("#   - /users/" + userInfo.uid + "/trips/{newGeneratedTripId}                       #");
+        console.error("# Example development rules: { \"rules\": { \".read\": \"auth != null\", \".write\": \"auth != null\" } } #");
+        console.error("##################################################################################");
     } else {
-        console.error("[tripService] Caught a non-Error object during trip creation:", String(error));
+        console.error("[tripService] An unexpected error occurred:", error);
     }
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     return null;
@@ -114,54 +116,63 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       return false;
     }
 
-    const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string };
+    const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; // Omit<Trip, 'id'> because id is the key
     console.log("[tripService] Found trip data for joining:", JSON.stringify(tripData, null, 2));
 
+    // Check if user is already a member
     if (tripData.members && tripData.members[userInfo.uid]) {
       console.log("[tripService] User is already a member of this trip:", tripId);
+      // Optionally, refresh user's local trip list info if it might be outdated
+      const userTripRef = ref(database, `users/${userInfo.uid}/trips/${tripId}`);
+      const userTripSnapshot = await get(userTripRef);
+      if (!userTripSnapshot.exists() || userTripSnapshot.val().name !== tripData.name) {
+         await set(userTripRef, { name: tripData.name, role: tripData.createdBy === userInfo.uid ? 'creator' : 'member' });
+         console.log("[tripService] Updated user's local trip info as it was missing or outdated.");
+      }
       return true; 
     }
     
     const memberData: TripMember = {
       uid: userInfo.uid,
-      name: userInfo.displayName ?? "Anonymous",
+      name: userInfo.displayName ?? "Anonymous User",
       email: userInfo.email,
-      joinedAt: Date.now(),
+      joinedAt: Date.now(), // Consider serverTimestamp()
     };
 
     if (!tripData.name) {
+        // This case should be rare if trips are created correctly
         console.error("[tripService] CRITICAL: Trip data fetched for joining is missing a name. Trip ID:", tripId);
         return false; 
     }
 
+    // Multi-path update to add member to trip and trip to user's list
     const updates: { [key: string]: any } = {};
     updates[`/trips/${tripId}/members/${userInfo.uid}`] = memberData;
     updates[`/users/${userInfo.uid}/trips/${tripId}`] = {
-      name: tripData.name,
-      role: 'member',
+      name: tripData.name, // Ensure name is from the authoritative tripData
+      role: 'member', // User joining is a member
     };
     
     console.log("[tripService] Updates to be performed for joining trip:", JSON.stringify(updates, null, 2));
-    await update(ref(database), updates);
+    await update(ref(database), updates); // Update at the root
     console.log("[tripService] Successfully joined trip:", tripId);
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error("!           SERVER-SIDE ERROR WHILE JOINING TRIP                                   !");
-    if (error instanceof Error) {
-        const firebaseErrorCode = (error as any).code;
-        console.error(`[tripService] Error: ${error.message} (Code: ${firebaseErrorCode || 'N/A'})`);
-        if (firebaseErrorCode === 'PERMISSION_DENIED') {
-             console.error("##################################################################################");
-             console.error("#                                PERMISSION DENIED!                                #");
-             console.error("# CHECK YOUR FIREBASE REALTIME DATABASE RULES.                                     #");
-             console.error("# Ensure authenticated users have write access to:                                 #");
-             console.error("#   - /trips/" + tripId + "/members/" + userInfo.uid + "                           #");
-             console.error("#   - /users/" + userInfo.uid + "/trips/" + tripId + "                             #");
-             console.error("##################################################################################");
-        }
+    const firebaseErrorCode = error.code;
+    const firebaseErrorMessage = error.message;
+    console.error(`[tripService] Error: ${firebaseErrorMessage} (Code: ${firebaseErrorCode || 'N/A'})`);
+    if (firebaseErrorCode === 'PERMISSION_DENIED') {
+         console.error("##################################################################################");
+         console.error("#                                PERMISSION DENIED!                                #");
+         console.error("# CHECK YOUR FIREBASE REALTIME DATABASE RULES.                                     #");
+         console.error("# Ensure authenticated users have write access to relevant paths:                  #");
+         console.error("#   - /trips/" + tripId + "/members/" + userInfo.uid + "                           #");
+         console.error("#   - /users/" + userInfo.uid + "/trips/" + tripId + "                             #");
+         console.error("##################################################################################");
     } else {
-        console.error("[tripService] Caught a non-Error object during trip joining:", String(error));
+        console.error("[tripService] An unexpected error occurred during join:", error);
     }
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     return false;
@@ -170,50 +181,62 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
 
 export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]> {
   console.log("[tripService] Fetching user trips for userId:", userId);
+  if (!userId) {
+    console.warn("[tripService] getUserTripsFromDb called with no userId.");
+    return [];
+  }
   try {
     const userTripsRef = ref(database, `users/${userId}/trips`);
     const snapshot = await get(userTripsRef);
     if (snapshot.exists()) {
       const tripsData = snapshot.val();
-      const userTripsArray = Object.keys(tripsData).map(tripId => ({
+      const userTripsArray: UserTripInfo[] = Object.keys(tripsData).map(tripId => ({
         id: tripId,
-        ...tripsData[tripId],
+        name: tripsData[tripId].name,
+        role: tripsData[tripId].role,
       }));
-      console.log(`[tripService] Found ${userTripsArray.length} trips for user ${userId}`);
+      console.log(`[tripService] Found ${userTripsArray.length} trips for user ${userId}:`, userTripsArray);
       return userTripsArray;
     }
     console.log("[tripService] No trips found for userId:", userId);
     return [];
-  } catch (error) {
+  } catch (error: any) {
     console.error("[tripService] Error fetching user trips. UserID:", userId);
-    if (error instanceof Error) {
-        console.error(`[tripService] Error: ${error.message} (Code: ${(error as any).code || 'N/A'})`);
-    } else {
-        console.error("[tripService] Caught a non-Error object while fetching user trips:", String(error));
+    const firebaseErrorCode = error.code;
+    const firebaseErrorMessage = error.message;
+    console.error(`[tripService] Error: ${firebaseErrorMessage} (Code: ${firebaseErrorCode || 'N/A'})`);
+    if (firebaseErrorCode === 'PERMISSION_DENIED') {
+        console.error("[tripService] PERMISSION DENIED while fetching user trips. Check rules for /users/" + userId + "/trips");
     }
-    return [];
+    return []; // Return empty array on error to prevent app crash
   }
 }
 
 export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null> {
   console.log("[tripService] Fetching trip details for tripId:", tripId);
+  if (!tripId) {
+    console.warn("[tripService] getTripDetailsFromDb called with no tripId.");
+    return null;
+  }
   try {
     const tripRef = ref(database, `trips/${tripId}`);
     const snapshot = await get(tripRef);
     if (snapshot.exists()) {
+      // Ensure the id is part of the returned object
       const tripDetails = { id: tripId, ...snapshot.val() } as Trip;
       console.log(`[tripService] Found trip details for tripId ${tripId}. Name: ${tripDetails.name}`);
       return tripDetails;
     }
     console.log("[tripService] No trip details found for tripId:", tripId);
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error("[tripService] Error fetching trip details. TripID:", tripId);
-     if (error instanceof Error) {
-        console.error(`[tripService] Error: ${error.message} (Code: ${(error as any).code || 'N/A'})`);
-    } else {
-        console.error("[tripService] Caught a non-Error object while fetching trip details:", String(error));
+    const firebaseErrorCode = error.code;
+    const firebaseErrorMessage = error.message;
+    console.error(`[tripService] Error: ${firebaseErrorMessage} (Code: ${firebaseErrorCode || 'N/A'})`);
+     if (firebaseErrorCode === 'PERMISSION_DENIED') {
+        console.error("[tripService] PERMISSION DENIED while fetching trip details. Check rules for /trips/" + tripId);
     }
-    return null;
+    return null; // Return null on error
   }
 }

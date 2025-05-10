@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -7,25 +6,55 @@ import { TripCard } from './TripCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import Image from 'next/image';
+import { AlertTriangle } from 'lucide-react';
 
 export function TripList() {
-  const { userTrips, isLoadingUserTrips, selectedTrip, isLoadingSelectedTrip } = useTripContext();
+  const { 
+    userTrips, 
+    isLoadingUserTrips, 
+    selectedTrip, 
+    isLoadingSelectedTrip, 
+    selectedTripId, // Use selectedTripId to know if a selection attempt was made
+    errorUserTrips,
+    errorSelectedTrip 
+  } = useTripContext();
 
   if (isLoadingUserTrips) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-        {[1, 2, 3].map((i) => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-6 w-3/4" />
-              <Skeleton className="h-4 w-1/2 mt-1" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-full" />
-            </CardContent>
-          </Card>
-        ))}
+      <div className="mt-6">
+        <h2 className="text-2xl font-semibold text-primary mb-4">Loading Your Trips...</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-4 w-1/2 mt-1" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-10 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
+    );
+  }
+
+  if (errorUserTrips) {
+    return (
+      <Card className="mt-6 text-center p-8 shadow-md bg-destructive/10 border-destructive">
+        <CardHeader>
+          <CardTitle className="text-2xl text-destructive-foreground flex items-center justify-center">
+            <AlertTriangle className="w-8 h-8 mr-2" /> Error Loading Trips
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CardDescription className="text-destructive-foreground/80">
+            We couldn't load your trips. Please try again later.
+          </CardDescription>
+          <p className="text-xs text-destructive-foreground/70 mt-2">{errorUserTrips}</p>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -53,7 +82,7 @@ export function TripList() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 mt-6">
       <div>
         <h2 className="text-2xl font-semibold text-primary mb-4">Your Trips</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -63,39 +92,50 @@ export function TripList() {
         </div>
       </div>
 
-      {selectedTrip && (
+      {selectedTripId && ( // Show selected trip section if an ID is selected
         <Card className="mt-8 shadow-lg bg-card">
           <CardHeader>
-            <CardTitle className="text-xl text-primary">Selected Trip: {selectedTrip.name}</CardTitle>
-            <CardDescription>ID: {selectedTrip.id}</CardDescription>
+            <CardTitle className="text-xl text-primary">
+              Selected Trip: {isLoadingSelectedTrip ? "Loading..." : (selectedTrip?.name || "Details")}
+            </CardTitle>
+            <CardDescription>ID: {selectedTripId}</CardDescription>
           </CardHeader>
           <CardContent>
-            <h3 className="font-semibold mb-2">Members:</h3>
             {isLoadingSelectedTrip ? (
-              <Skeleton className="h-5 w-1/2" />
+              <>
+                <Skeleton className="h-5 w-1/4 mb-2" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-4 w-1/3 mt-1" />
+              </>
+            ) : errorSelectedTrip ? (
+              <div className="text-destructive flex items-center">
+                <AlertTriangle className="w-5 h-5 mr-2"/> Could not load trip details: {errorSelectedTrip}
+              </div>
+            ) : selectedTrip ? (
+              <>
+                <h3 className="font-semibold mb-2 text-foreground">Members:</h3>
+                {selectedTrip.members && Object.keys(selectedTrip.members).length > 0 ? (
+                  <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                    {Object.values(selectedTrip.members).map(member => (
+                      <li key={member.uid}>{member.name || member.email || member.uid}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No members listed for this trip yet.</p>
+                )}
+                <p className="mt-4 text-xs text-muted-foreground">
+                  Created by: {selectedTrip.createdBy} on {new Date(selectedTrip.createdAt).toLocaleDateString()}
+                </p>
+                 <p className="mt-4 text-xs text-muted-foreground">
+                    Further trip details (itinerary, expenses, etc.) would be shown here or on a dedicated trip dashboard page.
+                </p>
+              </>
             ) : (
-              <ul className="list-disc pl-5 text-sm">
-                {selectedTrip.members && Object.values(selectedTrip.members).map(member => (
-                  <li key={member.uid}>{member.name || member.email}</li>
-                ))}
-              </ul>
+              <p className="text-muted-foreground">Trip details not found for ID: {selectedTripId}. It might have been deleted or the ID is incorrect.</p>
             )}
-            <p className="mt-4 text-xs text-muted-foreground">
-              Further trip details (itinerary, expenses, etc.) would be shown here or on a dedicated trip dashboard page.
-            </p>
           </CardContent>
         </Card>
       )}
-       {selectedTripId && !selectedTrip && !isLoadingSelectedTrip && (
-         <Card className="mt-8 shadow-lg bg-card">
-            <CardHeader>
-                <CardTitle className="text-xl text-destructive">Error Loading Trip Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p>Could not load details for the selected trip. It might have been deleted or there was a network issue.</p>
-            </CardContent>
-         </Card>
-       )}
     </div>
   );
 }
