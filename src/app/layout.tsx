@@ -16,13 +16,13 @@ import { MobileAuthHeader } from '@/components/layout/mobile-auth-header';
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
-  // display: 'swap', // Removed display: 'swap'
+  display: 'swap', // Re-added display: 'swap'
 });
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
-  // display: 'swap', // Removed display: 'swap'
+  display: 'swap', // Re-added display: 'swap'
 });
 
 export const metadata: Metadata = {
