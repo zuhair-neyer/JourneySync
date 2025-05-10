@@ -1,5 +1,4 @@
 
-
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
@@ -16,13 +15,13 @@ import { MobileAuthHeader } from '@/components/layout/mobile-auth-header';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
-  subsets: ['latin'],
+  // subsets: ['latin'], // Removed for diagnostics
   display: 'swap', 
 });
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
-  subsets: ['latin'],
+  // subsets: ['latin'], // Removed for diagnostics
   display: 'swap', 
 });
 
@@ -70,4 +69,3 @@ export default function RootLayout({
     </html>
   );
 }
-
