@@ -41,7 +41,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       members: {
         [userInfo.uid]: {
           uid: userInfo.uid,
-          name: userInfo.displayName ?? "Anonymous", // Provide a default if null
+          name: userInfo.displayName ?? "Anonymous", 
           email: userInfo.email,
           joinedAt: currentTime,
         },
@@ -61,16 +61,23 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     console.log("[tripService] Successfully set user trip info in /users path.");
 
     return tripId;
-  } catch (error: any) {
-    console.error("[tripService] Error creating trip:", error);
-    if (error.code) {
-      console.error("[tripService] Firebase error code:", error.code);
+  } catch (error) {
+    console.error("[tripService] Error creating trip. Raw error object logged below.");
+    console.error(error); 
+
+    if (error instanceof Error) {
+        console.error(`[tripService] Error Name: ${error.name}`);
+        console.error(`[tripService] Error Message: ${error.message}`);
+        if (error.stack) {
+            console.error(`[tripService] Error Stack: ${error.stack}`);
+        }
+        const firebaseErrorCode = (error as any).code;
+        if (firebaseErrorCode) {
+            console.error(`[tripService] Firebase Error Code: ${firebaseErrorCode}`);
+        }
+    } else {
+        console.error("[tripService] Caught a non-Error object during trip creation:", String(error));
     }
-    if (error.message) {
-      console.error("[tripService] Firebase error message:", error.message);
-    }
-    // For more detailed stack trace or error object:
-    // console.error("[tripService] Full Firebase error object:", JSON.stringify(error, null, 2));
     return null;
   }
 }
@@ -95,7 +102,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       return false;
     }
 
-    const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; // Ensure name exists
+    const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; 
     console.log("[tripService] Found trip data:", JSON.stringify(tripData, null, 2));
 
 
@@ -106,7 +113,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     
     const memberData: TripMember = {
       uid: userInfo.uid,
-      name: userInfo.displayName ?? "Anonymous", // Provide a default
+      name: userInfo.displayName ?? "Anonymous", 
       email: userInfo.email,
       joinedAt: Date.now(),
     };
@@ -116,13 +123,11 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     
     if (!tripData.name) {
         console.error("[tripService] Trip data fetched for joining is missing a name. Trip ID:", tripId);
-        // Fallback or error handling if tripData.name is unexpectedly missing
-        // This shouldn't happen if trips are created correctly.
         return false; 
     }
 
     updates[`/users/${userInfo.uid}/trips/${tripId}`] = {
-      name: tripData.name, // tripData.name should exist if the trip was created properly
+      name: tripData.name, 
       role: 'member',
     };
     
@@ -130,15 +135,23 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     await update(ref(database), updates);
     console.log("[tripService] Successfully joined trip:", tripId);
     return true;
-  } catch (error: any) {
-    console.error("[tripService] Error joining trip:", error);
-     if (error.code) {
-      console.error("[tripService] Firebase error code:", error.code);
+  } catch (error) {
+    console.error("[tripService] Error joining trip. Raw error object logged below. TripID:", tripId);
+    console.error(error);
+
+    if (error instanceof Error) {
+        console.error(`[tripService] Error Name: ${error.name}`);
+        console.error(`[tripService] Error Message: ${error.message}`);
+        if (error.stack) {
+            console.error(`[tripService] Error Stack: ${error.stack}`);
+        }
+        const firebaseErrorCode = (error as any).code;
+        if (firebaseErrorCode) {
+            console.error(`[tripService] Firebase Error Code: ${firebaseErrorCode}`);
+        }
+    } else {
+        console.error("[tripService] Caught a non-Error object during trip joining:", String(error));
     }
-    if (error.message) {
-      console.error("[tripService] Firebase error message:", error.message);
-    }
-    // console.error("[tripService] Full Firebase error object:", JSON.stringify(error, null, 2));
     return false;
   }
 }
@@ -159,10 +172,19 @@ export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]
     }
     console.log("[tripService] No trips found for userId:", userId);
     return [];
-  } catch (error: any) {
-    console.error("[tripService] Error fetching user trips for userId:", userId, error);
-    if (error.code) console.error("[tripService] Firebase error code:", error.code);
-    if (error.message) console.error("[tripService] Firebase error message:", error.message);
+  } catch (error) {
+    console.error("[tripService] Error fetching user trips. Raw error object logged below. UserID:", userId);
+    console.error(error);
+    if (error instanceof Error) {
+        console.error(`[tripService] Error Name: ${error.name}`);
+        console.error(`[tripService] Error Message: ${error.message}`);
+        const firebaseErrorCode = (error as any).code;
+        if (firebaseErrorCode) {
+            console.error(`[tripService] Firebase Error Code: ${firebaseErrorCode}`);
+        }
+    } else {
+        console.error("[tripService] Caught a non-Error object while fetching user trips:", String(error));
+    }
     return [];
   }
 }
@@ -179,10 +201,21 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     }
     console.log("[tripService] No trip details found for tripId:", tripId);
     return null;
-  } catch (error: any) {
-    console.error("[tripService] Error fetching trip details for tripId:", tripId, error);
-    if (error.code) console.error("[tripService] Firebase error code:", error.code);
-    if (error.message) console.error("[tripService] Firebase error message:", error.message);
+  } catch (error) {
+    console.error("[tripService] Error fetching trip details. Raw error object logged below. TripID:", tripId);
+    console.error(error);
+     if (error instanceof Error) {
+        console.error(`[tripService] Error Name: ${error.name}`);
+        console.error(`[tripService] Error Message: ${error.message}`);
+        const firebaseErrorCode = (error as any).code;
+        if (firebaseErrorCode) {
+            console.error(`[tripService] Firebase Error Code: ${firebaseErrorCode}`);
+        }
+    } else {
+        console.error("[tripService] Caught a non-Error object while fetching trip details:", String(error));
+    }
     return null;
   }
 }
+
+    
