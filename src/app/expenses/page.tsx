@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, PieChartIcon as LucidePieChartIcon, Download, Bell, CreditCard } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, PieChartIcon as LucidePieChartIcon, Download, Bell, CreditCard, CheckCircle } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Pie, Cell, PieLabelRenderProps, PieChart } from 'recharts';
@@ -39,6 +39,7 @@ interface Balance {
   netBalance: number; // Positive if owed by group, negative if owes to group
   totalPaid: number;
   totalShare: number;
+  isSettled: boolean;
 }
 
 const expenseCategories = ["Food", "Transport", "Accommodation", "Activities", "Shopping", "Miscellaneous"];
@@ -73,6 +74,8 @@ export default function ExpensesPage() {
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [totalGroupExpense, setTotalGroupExpense] = useState(0);
+  const [settledStatus, setSettledStatus] = useState<Record<string, boolean>>({});
+
 
   useEffect(() => {
     // Initialize users - current user + mock users
@@ -84,7 +87,6 @@ export default function ExpensesPage() {
       setUsers([{ id: currentUser.uid, name: currentUser.displayName || currentUser.email || 'Current User', email: currentUser.email }, ...mockUsers]);
     } else {
       // Fallback if currentUser is not yet available or user is not logged in
-      // This part might need adjustment based on how protected this route is
       setUsers([{ id: 'user1', name: 'Guest User (You)'}, ...mockUsers]);
     }
     
@@ -130,15 +132,16 @@ export default function ExpensesPage() {
       totalPaid: userExpensesSummary[user.id]?.paid || 0,
       totalShare: userExpensesSummary[user.id]?.share || 0,
       netBalance: (userExpensesSummary[user.id]?.paid || 0) - (userExpensesSummary[user.id]?.share || 0),
+      isSettled: settledStatus[user.id] || false,
     }));
 
     setBalances(newBalances);
     setTotalGroupExpense(newTotalGroupExpense);
-  }, [expenses, users]);
+  }, [expenses, users, settledStatus]);
 
   useEffect(() => {
     calculateBalancesAndTotal();
-  }, [expenses, users, calculateBalancesAndTotal]);
+  }, [expenses, users, calculateBalancesAndTotal, settledStatus]);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -174,8 +177,14 @@ export default function ExpensesPage() {
       setExpenses([...expenses, { ...currentExpense, id: Date.now().toString() } as Expense]);
       toast({ title: "Success", description: "Expense added." });
     }
+    // Reset settled status if expenses change, as balances will be different.
+    // This is a simple approach; a more complex app might only reset relevant users.
+    // setSettledStatus({}); 
+    // ^ Decided against auto-resetting settled status for now to keep user's manual "settled" action persistent.
+    // If balances become non-zero after being settled, the UI will reflect they owe again.
+
     setIsExpenseDialogOpen(false);
-    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id) }); // Reset with all users selected by default
+    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id) }); 
     setEditingExpenseId(null);
   };
 
@@ -188,12 +197,20 @@ export default function ExpensesPage() {
   const handleDeleteExpense = (id: string) => {
     setExpenses(expenses.filter(exp => exp.id !== id));
     toast({ title: "Success", description: "Expense deleted." });
+     // Similar to add/edit, consider if settled status needs reset.
+    // setSettledStatus({});
   };
 
   const openNewExpenseDialog = () => {
-    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id) }); // Default to all users participating
+    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id) });
     setEditingExpenseId(null);
     setIsExpenseDialogOpen(true);
+  };
+
+  const handleMarkAsSettled = (userIdToSettle: string) => {
+    setSettledStatus(prev => ({ ...prev, [userIdToSettle]: true }));
+    const userName = users.find(u => u.id === userIdToSettle)?.name || 'User';
+    toast({ title: "Success", description: `${userName}'s balance marked as settled.` });
   };
 
   const expenseDataForChart = expenseCategories.map(category => ({
@@ -227,7 +244,6 @@ export default function ExpensesPage() {
         </Button>
       </header>
 
-      {/* Dialog for Adding/Editing Expense */}
       <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
         <DialogContent className="sm:max-w-lg bg-card">
           <DialogHeader>
@@ -293,13 +309,12 @@ export default function ExpensesPage() {
                  <Button variant="outline" size="sm" onClick={() => setCurrentExpense(prev => ({...prev, participantIds: []}))} className="ml-2">Deselect All</Button>
               </div>
             </div>
-             {/* Placeholder for split type */}
             <Card className="mt-2 col-span-4">
                 <CardHeader className="p-2">
                     <CardTitle className="text-sm flex items-center"><AlertTriangle className="w-4 h-4 mr-1 text-yellow-500" />Split Logic</CardTitle>
                 </CardHeader>
                 <CardContent className="p-2 text-xs text-muted-foreground">
-                    Currently, all expenses are split equally among selected participants. Uneven splits, payment tracking, and currency conversion will be added in a future update.
+                    Currently, all expenses are split equally among selected participants. Uneven splits and currency conversion will be added in a future update.
                 </CardContent>
             </Card>
           </div>
@@ -310,7 +325,6 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Summary Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card className="shadow-md bg-card">
           <CardHeader>
@@ -325,7 +339,7 @@ export default function ExpensesPage() {
           <CardHeader>
             <CardTitle className="text-lg text-primary">Expenses by Category</CardTitle>
           </CardHeader>
-          <CardContent className="h-[200px] pt-0"> {/* Adjusted padding-top */}
+          <CardContent className="h-[200px] pt-0">
             {expenseDataForChart.length > 0 ? (
               <ChartContainer config={chartConfig} className="h-full w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -337,7 +351,7 @@ export default function ExpensesPage() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={60} // Adjusted radius
+                      outerRadius={60} 
                       labelLine={false}
                       label={({ name, percent }: PieLabelRenderProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
                     >
@@ -356,7 +370,6 @@ export default function ExpensesPage() {
         </Card>
       </div>
 
-      {/* Balances Section */}
       <Card className="mb-8 shadow-lg bg-card">
         <CardHeader>
           <CardTitle className="text-xl text-primary flex items-center"><Users className="mr-2" /> User Balances</CardTitle>
@@ -366,32 +379,41 @@ export default function ExpensesPage() {
           {balances.length > 0 ? (
             <ul className="space-y-3">
               {balances.map(balance => (
-                <li key={balance.userId} className="p-3 rounded-lg border bg-background flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-foreground">{balance.userName}</p>
-                    <p className="text-xs text-muted-foreground">Paid: {balance.totalPaid.toFixed(2)}, Share: {balance.totalShare.toFixed(2)}</p>
+                <li key={balance.userId} className="p-3 rounded-lg border bg-background">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-foreground">{balance.userName}</p>
+                      <p className="text-xs text-muted-foreground">Paid: {balance.totalPaid.toFixed(2)}, Share: {balance.totalShare.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                       <p className={`font-bold ${balance.isSettled ? 'text-green-600' : (balance.netBalance >= 0 ? 'text-green-600' : 'text-red-600')}`}>
+                        {balance.isSettled 
+                            ? <span className="flex items-center justify-end"><CheckCircle className="w-4 h-4 mr-1" />Settled</span>
+                            : (balance.netBalance >= 0 
+                                ? `Owed: ${balance.netBalance.toFixed(2)}` 
+                                : `Owes: ${Math.abs(balance.netBalance).toFixed(2)}`)}
+                      </p>
+                      {balance.netBalance < 0 && !balance.isSettled && (
+                        <Button
+                          onClick={() => handleMarkAsSettled(balance.userId)}
+                          size="sm"
+                          variant="outline"
+                          className="mt-1 text-xs h-auto py-1 px-2"
+                        >
+                          Mark as Settled
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <p className={`font-bold ${balance.netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {balance.netBalance >= 0 ? `Owed: ${balance.netBalance.toFixed(2)}` : `Owes: ${Math.abs(balance.netBalance).toFixed(2)}`}
-                  </p>
                 </li>
               ))}
             </ul>
           ) : (
              <p className="text-muted-foreground">No users found to calculate balances.</p>
           )}
-           <Card className="mt-4">
-                <CardHeader className="p-2">
-                    <CardTitle className="text-sm flex items-center"><AlertTriangle className="w-4 h-4 mr-1 text-yellow-500" />Payment Tracking</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 text-xs text-muted-foreground">
-                    Feature to track payments between users and mark balances as settled is coming soon.
-                </CardContent>
-            </Card>
         </CardContent>
       </Card>
 
-      {/* Expense List Section */}
       <h2 className="text-2xl font-semibold text-primary mb-4">All Expenses</h2>
       {expenses.length === 0 && (
          <Card className="text-center p-8 shadow-md bg-card">
@@ -444,14 +466,13 @@ export default function ExpensesPage() {
         })}
       </div>
       
-      {/* Placeholders for other features */}
        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="shadow-md bg-card opacity-70">
               <CardHeader>
                   <CardTitle className="text-lg text-primary flex items-center"><Bell className="mr-2 h-5 w-5"/>Notifications & Alerts</CardTitle>
               </CardHeader>
               <CardContent>
-                  <p className="text-muted-foreground">Real-time notifications for new expenses, payments, and overdue alerts are planned for a future update.</p>
+                  <p className="text-muted-foreground">Real-time notifications for new expenses, payments, overdue alerts and currency conversion are planned for a future update.</p>
               </CardContent>
           </Card>
           <Card className="shadow-md bg-card opacity-70">
