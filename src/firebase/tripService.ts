@@ -31,7 +31,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     const tripId = newTripRef.key;
 
     if (!tripId) {
-      console.error("[tripService] CRITICAL: Failed to generate trip ID from Firebase push. newTripRef.key is null. This is unexpected with a healthy Firebase setup.");
+      console.error("[tripService] CRITICAL: Failed to generate trip ID from Firebase push. newTripRef.key is null.");
       return null;
     }
     console.log("[tripService] Generated tripId:", tripId);
@@ -46,7 +46,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
         [userInfo.uid]: {
           uid: userInfo.uid,
           name: userInfo.displayName ?? "Anonymous", 
-          email: userInfo.email, // Storing email, can be null
+          email: userInfo.email,
           joinedAt: currentTime,
         },
       },
@@ -68,41 +68,22 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     return tripId;
   } catch (error) {
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.error("!           SERVER-SIDE ERROR: DETAILED FIREBASE ERROR WHILE CREATING TRIP         !");
-    console.error("!           Check your Firebase Realtime Database rules and the error details below. !");
-    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.error("Raw error object:", error); 
-
+    console.error("!           SERVER-SIDE ERROR WHILE CREATING TRIP                                !");
     if (error instanceof Error) {
-        console.error(`Error Name: ${error.name}`);
-        console.error(`Error Message: ${error.message}`);
-        if (error.stack) {
-            console.error(`Error Stack: ${error.stack}`);
-        }
-        const firebaseErrorCode = (error as any).code; 
-        if (firebaseErrorCode) {
-            console.error(`Firebase Error Code: ${firebaseErrorCode}`);
-            if (firebaseErrorCode === 'PERMISSION_DENIED') {
-                console.error("##################################################################################");
-                console.error("#                                PERMISSION DENIED!                                #");
-                console.error("# This is THE MOST COMMON REASON for 'Failed to create trip'.                      #");
-                console.error("# PLEASE CHECK YOUR FIREBASE REALTIME DATABASE RULES.                              #");
-                console.error("# Go to Firebase Console -> Build -> Realtime Database -> Rules tab.               #");
-                console.error("#                                                                                #");
-                console.error("# Ensure authenticated users have write access to these paths:                     #");
-                console.error("#   - /trips/{newTripId}                                                           #");
-                console.error("#   - /users/" + userInfo.uid + "/trips/{newTripId}                               #");
-                console.error("#                                                                                #");
-                console.error("# For DEVELOPMENT, these rules allow any AUTHENTICATED user to read/write:         #");
-                console.error(`# { "rules": { ".read": "auth != null", ".write": "auth != null" } }               #`);
-                console.error("# (Copy and paste the line above into your Firebase rules editor if unsure)        #");
-                console.error("#                                                                                #");
-                console.error("# If you have more specific rules, ensure they cover these paths for the user.     #");
-                console.error("##################################################################################");
-            }
+        const firebaseErrorCode = (error as any).code;
+        console.error(`[tripService] Error: ${error.message} (Code: ${firebaseErrorCode || 'N/A'})`);
+        if (firebaseErrorCode === 'PERMISSION_DENIED') {
+            console.error("##################################################################################");
+            console.error("#                                PERMISSION DENIED!                                #");
+            console.error("# CHECK YOUR FIREBASE REALTIME DATABASE RULES.                                     #");
+            console.error("# Ensure authenticated users have write access to:                                 #");
+            console.error("#   - /trips/{newTripId}                                                           #");
+            console.error("#   - /users/" + userInfo.uid + "/trips/{newTripId}                               #");
+            console.error("# Development rules example: { \"rules\": { \".read\": \"auth != null\", \".write\": \"auth != null\" } } #");
+            console.error("##################################################################################");
         }
     } else {
-        console.error("Caught a non-Error object during trip creation:", String(error));
+        console.error("[tripService] Caught a non-Error object during trip creation:", String(error));
     }
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     return null;
@@ -149,14 +130,14 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     };
 
     if (!tripData.name) {
-        console.error("[tripService] CRITICAL: Trip data fetched for joining is missing a name. Trip ID:", tripId, "Data:", JSON.stringify(tripData));
+        console.error("[tripService] CRITICAL: Trip data fetched for joining is missing a name. Trip ID:", tripId);
         return false; 
     }
 
     const updates: { [key: string]: any } = {};
     updates[`/trips/${tripId}/members/${userInfo.uid}`] = memberData;
     updates[`/users/${userInfo.uid}/trips/${tripId}`] = {
-      name: tripData.name, // Ensured tripData.name exists by check above
+      name: tripData.name,
       role: 'member',
     };
     
@@ -166,37 +147,18 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     return true;
   } catch (error) {
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.error("!           SERVER-SIDE ERROR: DETAILED FIREBASE ERROR WHILE JOINING TRIP          !");
-    console.error("!           Check your Firebase Realtime Database rules and the error details below. !");
-    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.error("Raw error object (joining trip). TripID:", tripId, "Error:", error);
-
+    console.error("!           SERVER-SIDE ERROR WHILE JOINING TRIP                                   !");
     if (error instanceof Error) {
-        console.error(`Error Name: ${error.name}`);
-        console.error(`Error Message: ${error.message}`);
-        if (error.stack) {
-            console.error(`Error Stack: ${error.stack}`);
-        }
         const firebaseErrorCode = (error as any).code;
-        if (firebaseErrorCode) {
-            console.error(`Firebase Error Code: ${firebaseErrorCode}`);
-             if (firebaseErrorCode === 'PERMISSION_DENIED') {
-                console.error("##################################################################################");
-                console.error("#                                PERMISSION DENIED!                                #");
-                console.error("# This is THE MOST COMMON REASON for 'Failed to join trip'.                        #");
-                console.error("# PLEASE CHECK YOUR FIREBASE REALTIME DATABASE RULES.                              #");
-                console.error("# Go to Firebase Console -> Build -> Realtime Database -> Rules tab.               #");
-                console.error("#                                                                                #");
-                console.error("# Ensure authenticated users have write access to these paths:                     #");
-                console.error("#   - /trips/" + tripId + "/members/" + userInfo.uid + "                           #");
-                console.error("#   - /users/" + userInfo.uid + "/trips/" + tripId + "                             #");
-                console.error("#                                                                                #");
-                console.error("# For DEVELOPMENT, these rules allow any AUTHENTICATED user to read/write:         #");
-                console.error(`# { "rules": { ".read": "auth != null", ".write": "auth != null" } }               #`);
-                console.error("#                                                                                #");
-                console.error("# If you have more specific rules, ensure they cover these paths for the user.     #");
-                console.error("##################################################################################");
-            }
+        console.error(`[tripService] Error: ${error.message} (Code: ${firebaseErrorCode || 'N/A'})`);
+        if (firebaseErrorCode === 'PERMISSION_DENIED') {
+             console.error("##################################################################################");
+             console.error("#                                PERMISSION DENIED!                                #");
+             console.error("# CHECK YOUR FIREBASE REALTIME DATABASE RULES.                                     #");
+             console.error("# Ensure authenticated users have write access to:                                 #");
+             console.error("#   - /trips/" + tripId + "/members/" + userInfo.uid + "                           #");
+             console.error("#   - /users/" + userInfo.uid + "/trips/" + tripId + "                             #");
+             console.error("##################################################################################");
         }
     } else {
         console.error("[tripService] Caught a non-Error object during trip joining:", String(error));
@@ -217,20 +179,15 @@ export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]
         id: tripId,
         ...tripsData[tripId],
       }));
-      // console.log("[tripService] Found user trips:", JSON.stringify(userTripsArray.map(t => ({...t, name: t.name.substring(0,20) + '...'})))); // Truncate names for brevity
       console.log(`[tripService] Found ${userTripsArray.length} trips for user ${userId}`);
       return userTripsArray;
     }
     console.log("[tripService] No trips found for userId:", userId);
     return [];
   } catch (error) {
-    console.error("[tripService] Error fetching user trips. UserID:", userId, "Raw error:", error);
+    console.error("[tripService] Error fetching user trips. UserID:", userId);
     if (error instanceof Error) {
-        console.error(`[tripService] Error Name: ${error.name}, Message: ${error.message}`);
-        const firebaseErrorCode = (error as any).code;
-        if (firebaseErrorCode) {
-            console.error(`[tripService] Firebase Error Code: ${firebaseErrorCode}`);
-        }
+        console.error(`[tripService] Error: ${error.message} (Code: ${(error as any).code || 'N/A'})`);
     } else {
         console.error("[tripService] Caught a non-Error object while fetching user trips:", String(error));
     }
@@ -245,20 +202,15 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     const snapshot = await get(tripRef);
     if (snapshot.exists()) {
       const tripDetails = { id: tripId, ...snapshot.val() } as Trip;
-      // console.log("[tripService] Found trip details for tripId:", tripId, JSON.stringify(tripDetails, null, 2)); // Log full details if needed for debugging
       console.log(`[tripService] Found trip details for tripId ${tripId}. Name: ${tripDetails.name}`);
       return tripDetails;
     }
     console.log("[tripService] No trip details found for tripId:", tripId);
     return null;
   } catch (error) {
-    console.error("[tripService] Error fetching trip details. TripID:", tripId, "Raw error:", error);
+    console.error("[tripService] Error fetching trip details. TripID:", tripId);
      if (error instanceof Error) {
-        console.error(`[tripService] Error Name: ${error.name}, Message: ${error.message}`);
-        const firebaseErrorCode = (error as any).code;
-        if (firebaseErrorCode) {
-            console.error(`[tripService] Firebase Error Code: ${firebaseErrorCode}`);
-        }
+        console.error(`[tripService] Error: ${error.message} (Code: ${(error as any).code || 'N/A'})`);
     } else {
         console.error("[tripService] Caught a non-Error object while fetching trip details:", String(error));
     }
