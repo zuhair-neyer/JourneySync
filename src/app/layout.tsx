@@ -9,6 +9,7 @@ import { JourneySyncLogo } from '@/components/icons';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/contexts/AuthContext';
 import { PageContentSidebarTrigger } from '@/components/layout/page-content-sidebar-trigger';
+import { MobileAuthHeader } from '@/components/layout/mobile-auth-header';
 
 
 const geistSans = Geist({
@@ -53,6 +54,7 @@ export default function RootLayout({
             </Sidebar>
             <SidebarInset>
               <PageContentSidebarTrigger />
+              <MobileAuthHeader />
               {children}
             </SidebarInset>
           </SidebarProvider>
