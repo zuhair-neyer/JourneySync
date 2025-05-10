@@ -75,11 +75,13 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
         if (error.stack) {
             console.error(`[tripService] Error Stack: ${error.stack}`);
         }
+        // Attempt to access Firebase specific error code if available
         const firebaseErrorCode = (error as any).code;
         if (firebaseErrorCode) {
             console.error(`[tripService] Firebase Error Code: ${firebaseErrorCode}`);
         }
     } else {
+        // Handle cases where the caught object is not an Error instance
         console.error("[tripService] Caught a non-Error object during trip creation:", String(error));
     }
     console.error("----------------------------------------------------------------------------------");
@@ -107,18 +109,19 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       return false;
     }
 
-    const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; 
+    const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; // Cast to include optional id
     console.log("[tripService] Found trip data:", JSON.stringify(tripData, null, 2));
 
 
+    // Check if user is already a member
     if (tripData.members && tripData.members[userInfo.uid]) {
       console.log("[tripService] User is already a member of this trip:", tripId);
-      return true; 
+      return true; // User is already a member, no action needed, consider this a success
     }
     
     const memberData: TripMember = {
       uid: userInfo.uid,
-      name: userInfo.displayName ?? "Anonymous", 
+      name: userInfo.displayName ?? "Anonymous", // Use nullish coalescing for display name
       email: userInfo.email,
       joinedAt: Date.now(),
     };
@@ -126,13 +129,15 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     const updates: { [key: string]: any } = {};
     updates[`/trips/${tripId}/members/${userInfo.uid}`] = memberData;
     
+    // Ensure tripData.name exists before trying to use it
     if (!tripData.name) {
         console.error("[tripService] Trip data fetched for joining is missing a name. Trip ID:", tripId);
+        // Potentially handle this error differently, e.g., use a default name or fail
         return false; 
     }
 
     updates[`/users/${userInfo.uid}/trips/${tripId}`] = {
-      name: tripData.name, 
+      name: tripData.name, // Use the fetched trip name
       role: 'member',
     };
     
@@ -226,3 +231,4 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     return null;
   }
 }
+
