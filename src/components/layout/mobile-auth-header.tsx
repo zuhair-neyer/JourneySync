@@ -17,8 +17,10 @@ export function MobileAuthHeader() {
     // Optionally, only show loader if determined to be mobile and still loading auth
     if (typeof isMobile !== 'undefined' && isMobile && authLoading) {
         return (
-            <div className="fixed top-4 right-4 z-50 p-2">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <div className="fixed top-4 right-4 z-50 p-1">
+                <Button variant="ghost" size="icon-circular" className="text-primary bg-card/80 backdrop-blur-sm shadow-md" disabled>
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                </Button>
             </div>
         );
     }
@@ -30,27 +32,27 @@ export function MobileAuthHeader() {
   // 2. There is NO current user (user is not logged in).
   if (isMobile && !currentUser) {
     return (
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-1 bg-card/80 backdrop-blur-sm p-1 rounded-md shadow-md">
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-transparent">
         <Button
           variant="ghost"
-          size="sm"
-          className="text-primary hover:bg-accent/20 hover:text-primary px-2 py-1"
+          size="icon-circular"
+          className="text-primary hover:bg-accent/20 hover:text-primary bg-card/80 backdrop-blur-sm shadow-md"
           asChild
+          aria-label="Log In"
         >
           <Link href="/login">
-            <LogIn className="mr-1 h-4 w-4" />
-            Log In
+            <LogIn className="h-5 w-5" />
           </Link>
         </Button>
         <Button
           variant="ghost"
-          size="sm"
-          className="text-primary hover:bg-accent/20 hover:text-primary px-2 py-1"
+          size="icon-circular"
+          className="text-primary hover:bg-accent/20 hover:text-primary bg-card/80 backdrop-blur-sm shadow-md"
           asChild
+          aria-label="Sign Up"
         >
           <Link href="/signup">
-            <UserPlus className="mr-1 h-4 w-4" />
-            Sign Up
+            <UserPlus className="h-5 w-5" />
           </Link>
         </Button>
       </div>
@@ -59,3 +61,4 @@ export function MobileAuthHeader() {
 
   return null; // Otherwise, don't render anything
 }
+
