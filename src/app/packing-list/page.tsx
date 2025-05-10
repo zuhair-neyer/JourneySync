@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Trash2, Edit2, Sparkles, Sun, CloudRain, Snowflake } from "lucide-react";
+import { PlusCircle, Trash2, Edit2, Sparkles, Sun, CloudRain, Snowflake, Luggage } from "lucide-react";
 import Image from 'next/image';
+import { cn } from '@/lib/utils';
 
 interface PackingItem {
   id: string;

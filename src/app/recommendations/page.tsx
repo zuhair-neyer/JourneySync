@@ -18,7 +18,7 @@ const initialState: { recommendations?: SmartRecommendationsOutput['recommendati
   recommendations: [],
 };
 
-async function handleSubmit(_prevState: any, formData: FormData) {
+async function handleSubmit(_prevState: any, formData: FormData): Promise<{ recommendations?: SmartRecommendationsOutput['recommendations']; error?: string; }> {
   const input: SmartRecommendationsInput = {
     userPreferences: formData.get('userPreferences') as string,
     timeOfDay: formData.get('timeOfDay') as string,
