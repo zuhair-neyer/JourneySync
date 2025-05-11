@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ReactNode, Dispatch, SetStateAction } from 'react';
@@ -53,7 +54,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
+      // Ensure a new object reference for state update if user exists
+      setCurrentUser(user ? { ...user } as FirebaseUser : null);
       setLoading(false);
     });
     return unsubscribe; // Cleanup subscription on unmount
@@ -74,7 +76,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await userCredential.user.reload();
         // Fetch the latest user object which should include the updated profile
         const updatedUser = auth.currentUser; 
-        setCurrentUser(updatedUser);
+        // Ensure a new object reference for state update
+        setCurrentUser(updatedUser ? { ...updatedUser } as FirebaseUser : null);
       }
       
       toast({ title: "Success", description: "Account created successfully!" });
@@ -97,7 +100,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistenceType);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      setCurrentUser(userCredential.user);
+      // Ensure a new object reference for state update
+      setCurrentUser(userCredential.user ? { ...userCredential.user } as FirebaseUser : null);
       toast({ title: "Success", description: "Logged in successfully!" });
       router.push('/'); 
       return userCredential.user;
@@ -141,6 +145,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Reload the user to ensure the profile update (displayName) is reflected
       await auth.currentUser.reload();
       // Update local currentUser state by re-fetching from auth.currentUser
+      // Ensure a new object reference for state update
       setCurrentUser(auth.currentUser ? { ...auth.currentUser } as FirebaseUser : null);
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
@@ -187,3 +192,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
