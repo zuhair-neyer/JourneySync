@@ -70,26 +70,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       if (userCredential.user) {
-        const userToUpdate = userCredential.user;
-        console.log("[AuthContext] signUp: User created. UID:", userToUpdate.uid, "Initial displayName:", userToUpdate.displayName);
+        const userInstance = userCredential.user; 
+        console.log("[AuthContext] signUp: User created. UID:", userInstance.uid, "Initial displayName:", userInstance.displayName);
         
-        console.log("[AuthContext] signUp: Attempting to update profile with name:", name);
-        await updateProfile(userToUpdate, { displayName: name });
-        console.log("[AuthContext] signUp: updateProfile call completed.");
+        console.log("[AuthContext] signUp: Attempting to update profile with name:", name, "for user UID:", userInstance.uid);
+        await updateProfile(userInstance, { displayName: name });
+        console.log("[AuthContext] signUp: updateProfile call completed for UID:", userInstance.uid);
         
-        // Crucial: Reload the user to get the updated profile information from Firebase
-        await userToUpdate.reload(); 
-        console.log("[AuthContext] signUp: User reloaded. New displayName from reloaded userToUpdate object:", userToUpdate.displayName);
+        await userInstance.reload(); 
+        console.log("[AuthContext] signUp: User reloaded (userInstance.reload() completed). UID:", userInstance.uid);
+        console.log("[AuthContext] signUp: DisplayName from userInstance *after* reload:", userInstance.displayName);
         
-        // Update the auth context's currentUser with the reloaded user object
-        // Creating a new object for setCurrentUser ensures React detects the change.
-        setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
-        // Log displayName from auth.currentUser to see if it's reflected there too.
-        console.log("[AuthContext] signUp: currentUser state updated in context. New displayName from auth.currentUser after reload and setCurrentUser:", auth.currentUser?.displayName);
+        setCurrentUser(userInstance ? { ...userInstance } as FirebaseUser : null); 
+        console.log("[AuthContext] signUp: setCurrentUser called with userInstance.displayName:", userInstance.displayName);
         
+        const refreshedAuthCurrentUser = auth.currentUser;
+        if (refreshedAuthCurrentUser && refreshedAuthCurrentUser.uid === userInstance.uid) {
+            // It's possible auth.currentUser might not be the same instance as userInstance immediately.
+            // Reloading auth.currentUser if it exists and matches UID.
+            await refreshedAuthCurrentUser.reload();
+            console.log("[AuthContext] signUp: auth.currentUser (matching UID) reloaded. displayName:", refreshedAuthCurrentUser.displayName, "UID:", refreshedAuthCurrentUser.uid);
+            // Optionally, update context again if refreshedAuthCurrentUser is considered more canonical
+            // setCurrentUser({ ...refreshedAuthCurrentUser } as FirebaseUser); 
+        } else {
+            console.log("[AuthContext] signUp: auth.currentUser is null or different after trying to refresh it, relying on userInstance from credential.", "auth.currentUser UID:", refreshedAuthCurrentUser?.uid);
+        }
+
         toast({ title: "Success", description: "Account created successfully!" });
         router.push('/'); 
-        return userToUpdate; // Return the reloaded user
+        return userInstance; 
       }
       console.warn("[AuthContext] signUp: userCredential.user was null after creation.");
       return null; 
@@ -159,16 +168,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
     setLoading(true);
     setError(null);
-    console.log("[AuthContext] updateUserProfile: Attempting to update name to:", name);
+    const userToUpdate = auth.currentUser;
+    console.log("[AuthContext] updateUserProfile: Attempting to update name to:", name, "for UID:", userToUpdate.uid, "Current displayName:", userToUpdate.displayName);
     try {
-      const userToUpdate = auth.currentUser;
       await updateProfile(userToUpdate, { displayName: name });
-      // Crucial: Reload the user to get the updated profile information
       await userToUpdate.reload();
-      console.log("[AuthContext] updateUserProfile: Profile updated and reloaded. New displayName from reloaded user:", userToUpdate.displayName);
-      // Ensure a new object is passed to setCurrentUser to trigger re-renders
+      console.log("[AuthContext] updateUserProfile: Profile updated and reloaded. New displayName from reloaded userToUpdate:", userToUpdate.displayName);
+      
       setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
-      console.log("[AuthContext] updateUserProfile: currentUser state updated. New displayName from auth.currentUser:", auth.currentUser?.displayName);
+      console.log("[AuthContext] updateUserProfile: setCurrentUser called. displayName from userToUpdate:", userToUpdate.displayName);
+
+      const refreshedAuthCurrentUser = auth.currentUser;
+      if (refreshedAuthCurrentUser && refreshedAuthCurrentUser.uid === userToUpdate.uid) {
+          await refreshedAuthCurrentUser.reload();
+          console.log("[AuthContext] updateUserProfile: auth.currentUser (matching UID) reloaded. displayName:", refreshedAuthCurrentUser.displayName);
+           // setCurrentUser({ ...refreshedAuthCurrentUser } as FirebaseUser);
+      } else {
+          console.log("[AuthContext] updateUserProfile: auth.currentUser is null or different after trying to refresh it.");
+      }
+
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
       const authError = e as AuthError;

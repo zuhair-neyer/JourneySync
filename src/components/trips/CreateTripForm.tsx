@@ -38,6 +38,11 @@ export function CreateTripForm() {
       console.error("[CreateTripForm] handleSubmit: currentUser is null.");
       return;
     }
+    if (!currentUser.displayName || currentUser.displayName.trim() === "") {
+      toast({ variant: "destructive", title: "Display Name Required", description: "Your display name is not set or is empty. Please update it in your account settings or wait a moment for it to sync before creating a trip." });
+      console.error("[CreateTripForm] handleSubmit: currentUser.displayName is missing or empty.");
+      return;
+    }
     if (!tripName.trim()) {
       toast({ variant: "destructive", title: "Error", description: "Trip name cannot be empty." });
       return;
@@ -45,7 +50,6 @@ export function CreateTripForm() {
 
     console.log("[CreateTripForm] handleSubmit: currentUser.displayName AT POINT OF SUBMISSION:", currentUser.displayName);
     console.log("[CreateTripForm] handleSubmit: Full currentUser object AT POINT OF SUBMISSION:", JSON.stringify({uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email}));
-
 
     setIsLoading(true);
     setCreatedTripId(null);
@@ -112,7 +116,7 @@ export function CreateTripForm() {
           )}
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading || !currentUser}>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading || !currentUser || !currentUser.displayName}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Create Trip
           </Button>

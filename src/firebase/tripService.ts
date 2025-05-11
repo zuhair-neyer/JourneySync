@@ -11,19 +11,27 @@ interface BasicUserInfo {
 }
 
 function generateMemberName(userInfo: BasicUserInfo): string {
+  console.log("[tripService] generateMemberName input userInfo.displayName:", userInfo.displayName);
+  console.log("[tripService] generateMemberName input userInfo.email:", userInfo.email);
   if (userInfo.displayName && userInfo.displayName.trim() !== "") {
+    console.log("[tripService] generateMemberName using displayName:", userInfo.displayName.trim());
     return userInfo.displayName.trim();
   }
   if (userInfo.email) {
     const emailNamePart = userInfo.email.split('@')[0];
-    if (emailNamePart) return emailNamePart;
+    if (emailNamePart && emailNamePart.trim() !== "") {
+      console.log("[tripService] generateMemberName using email prefix:", emailNamePart);
+      return emailNamePart;
+    }
   }
-  return `User...${userInfo.uid.substring(userInfo.uid.length - 4)}`; // Fallback to a generic name with UID suffix
+  const fallbackName = `User...${userInfo.uid.substring(userInfo.uid.length - 4)}`;
+  console.log("[tripService] generateMemberName using fallback:", fallbackName);
+  return fallbackName; 
 }
 
 export async function createTripInDb(tripName: string, userInfo: BasicUserInfo): Promise<string | null> {
   console.log("[tripService] createTripInDb: Received userInfo:", JSON.stringify(userInfo));
-  console.log("[tripService] Attempting to create trip. Name:", tripName, "User ID:", userInfo.uid, "Display Name from userInfo:", userInfo.displayName);
+  console.log("[tripService] Attempting to create trip. Name:", tripName, "User ID:", userInfo.uid, "Display Name from userInfo for create:", userInfo.displayName);
 
 
   if (!tripName.trim()) {
@@ -33,6 +41,10 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
   if (!userInfo || !userInfo.uid) {
     console.error("[tripService] User info or UID is missing. userInfo received:", JSON.stringify(userInfo));
     return null;
+  }
+   if (!userInfo.displayName || userInfo.displayName.trim() === "") {
+    console.warn("[tripService] createTripInDb: userInfo.displayName is missing or empty. Member name will be generated based on fallback logic.");
+    // The generateMemberName function will handle this, but good to log.
   }
 
   try {
@@ -46,19 +58,19 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     }
     
     const memberName = generateMemberName(userInfo);
-    console.log("[tripService] createTripInDb: Generated memberName:", memberName);
+    console.log("[tripService] createTripInDb: Generated memberName:", memberName, "from userInfo.displayName:", userInfo.displayName, "and email:", userInfo.email);
 
 
     const newTripData: Omit<Trip, 'id'> = {
       name: tripName,
       createdBy: userInfo.uid,
-      createdAt: serverTimestamp() as any, // Firebase server timestamp
+      createdAt: serverTimestamp() as any, 
       members: {
         [userInfo.uid]: {
           uid: userInfo.uid,
           name: memberName, 
           email: userInfo.email,
-          joinedAt: serverTimestamp() as any, // Firebase server timestamp
+          joinedAt: serverTimestamp() as any, 
         },
       },
     };
@@ -84,8 +96,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
 
 export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Promise<boolean> {
   console.log("[tripService] joinTripInDb: Received userInfo:", JSON.stringify(userInfo));
-  console.log("[tripService] Attempting to join trip. TripID:", tripId, "User ID:", userInfo.uid, "Display Name from userInfo:", userInfo.displayName);
-
+  console.log("[tripService] Attempting to join trip. TripID:", tripId, "User ID:", userInfo.uid, "Display Name from userInfo for join:", userInfo.displayName);
 
   if (!tripId.trim()) {
     console.error("[tripService] Trip ID cannot be empty for joining.");
@@ -94,6 +105,9 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
    if (!userInfo || !userInfo.uid) {
     console.error("[tripService] User info or UID is missing for joining trip. userInfo received:", JSON.stringify(userInfo));
     return false;
+  }
+  if (!userInfo.displayName || userInfo.displayName.trim() === "") {
+    console.warn("[tripService] joinTripInDb: userInfo.displayName is missing or empty. Member name will be generated based on fallback logic.");
   }
 
   try {
@@ -107,13 +121,29 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
 
     const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; 
 
-    // Check if user is already a member
+    const memberName = generateMemberName(userInfo); // Generate name before checking if already member, to ensure it's up-to-date if they are.
+    console.log("[tripService] joinTripInDb: Generated memberName:", memberName, "from userInfo.displayName:", userInfo.displayName, "and email:", userInfo.email);
+
     if (tripData.members && tripData.members[userInfo.uid]) {
       console.log("[tripService] User is already a member of this trip:", tripId);
-      // Optionally, ensure their local /users/{uid}/trips entry is consistent
+      const existingMemberData = tripData.members[userInfo.uid];
+      const updatesForExistingMember: Partial<TripMember> = {};
+      let consistencyUpdatesNeeded = false;
+
+      if (existingMemberData.name !== memberName) {
+        updatesForExistingMember.name = memberName;
+        consistencyUpdatesNeeded = true;
+        console.log(`[tripService] Updating member name in trip ${tripId} from '${existingMemberData.name}' to '${memberName}'`);
+      }
+      // Could add email update check here too if necessary
+
+      if (consistencyUpdatesNeeded) {
+        await update(ref(database, `/trips/${tripId}/members/${userInfo.uid}`), updatesForExistingMember);
+      }
+      
+      // Ensure their local /users/{uid}/trips entry is consistent
       const userTripRef = ref(database, `users/${userInfo.uid}/trips/${tripId}`);
       const userTripSnapshot = await get(userTripRef);
-      const existingMemberData = tripData.members[userInfo.uid];
       const expectedNameInUserTrips = tripData.name;
       const expectedRole = tripData.createdBy === userInfo.uid ? 'creator' : 'member';
 
@@ -123,20 +153,9 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
          console.log("[tripService] Updating user's local trip entry for consistency for tripId:", tripId);
          await set(userTripRef, { name: expectedNameInUserTrips, role: expectedRole });
       }
-      // Also ensure the name in the main trip members list is up-to-date if it was missing or different
-      const currentMemberNameInTrip = existingMemberData.name;
-      const newGeneratedName = generateMemberName(userInfo);
-      if(currentMemberNameInTrip !== newGeneratedName) {
-        console.log(`[tripService] Updating member name in trip ${tripId} from '${currentMemberNameInTrip}' to '${newGeneratedName}'`);
-        await update(ref(database, `/trips/${tripId}/members/${userInfo.uid}`), { name: newGeneratedName });
-      }
       return true; 
     }
     
-    const memberName = generateMemberName(userInfo);
-    console.log("[tripService] joinTripInDb: Generated memberName for new member:", memberName);
-
-
     const memberData: TripMember = {
       uid: userInfo.uid,
       name: memberName,
@@ -152,7 +171,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     const updates: { [key: string]: any } = {};
     updates[`/trips/${tripId}/members/${userInfo.uid}`] = memberData;
     updates[`/users/${userInfo.uid}/trips/${tripId}`] = {
-      name: tripData.name, // Use the trip's actual name
+      name: tripData.name, 
       role: 'member',
     };
     
