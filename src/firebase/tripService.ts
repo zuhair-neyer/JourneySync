@@ -1,7 +1,7 @@
 'use server';
 import { database } from '@/firebase/config';
-import type { Trip, TripMember, UserTripInfo } from '@/types';
-import { ref, push, set, get, child, update, serverTimestamp } from 'firebase/database';
+import type { Trip, TripMember, UserTripInfo, Expense } from '@/types';
+import { ref, push, set, get, child, update, serverTimestamp, remove } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
 interface BasicUserInfo {
@@ -78,6 +78,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
           joinedAt: serverTimestamp() as any, 
         },
       },
+      expenses: {}, // Initialize expenses node
     };
     await set(newTripRef, newTripData);
 
@@ -254,6 +255,7 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         members: processedMembers,
         // Ensure createdBy is present, potentially fetching creator details if needed, though usually it's just UID
         createdBy: tripData.createdBy,
+        expenses: tripData.expenses || {}, // Ensure expenses node exists
       } as Trip;
 
       // Special handling if creator is not in members list (shouldn't happen with current logic but good safeguard)
@@ -377,6 +379,90 @@ export async function updateTripNameInDb(tripId: string, newTripName: string, me
     if (error.code === 'PERMISSION_DENIED') {
         console.error("[tripService] updateTripNameInDb: PERMISSION DENIED. Check Firebase Realtime Database rules for writing to '/trips' and '/users'.");
     }
+    return false;
+  }
+}
+
+
+// Expense related functions
+export async function addExpenseToDb(tripId: string, expenseData: Omit<Expense, 'id' | 'tripId'>): Promise<string | null> {
+  if (!tripId) {
+    console.error("[tripService] addExpenseToDb: Trip ID is required.");
+    return null;
+  }
+  try {
+    const expensesRef = ref(database, `trips/${tripId}/expenses`);
+    const newExpenseRef = push(expensesRef);
+    const expenseId = newExpenseRef.key;
+
+    if (!expenseId) {
+      console.error("[tripService] addExpenseToDb: Failed to generate expense ID.");
+      return null;
+    }
+    const expenseToAdd: Omit<Expense, 'tripId'> = { ...expenseData, id: expenseId };
+    await set(newExpenseRef, expenseToAdd);
+    console.log(`[tripService] addExpenseToDb: Expense added with ID ${expenseId} to trip ${tripId}`);
+    return expenseId;
+  } catch (error: any) {
+    console.error(`[tripService] addExpenseToDb: Error adding expense to trip ${tripId}:`, error.message);
+    return null;
+  }
+}
+
+export async function getExpensesForTripFromDb(tripId: string): Promise<Expense[]> {
+  if (!tripId) {
+    console.warn("[tripService] getExpensesForTripFromDb: called with no tripId.");
+    return [];
+  }
+  try {
+    const expensesRef = ref(database, `trips/${tripId}/expenses`);
+    const snapshot = await get(expensesRef);
+    if (snapshot.exists()) {
+      const expensesData = snapshot.val();
+      const expensesArray: Expense[] = Object.keys(expensesData).map(expenseId => ({
+        ...expensesData[expenseId],
+        id: expenseId,
+        tripId: tripId, // Ensure tripId is part of the returned expense object
+      }));
+      console.log(`[tripService] getExpensesForTripFromDb: Found ${expensesArray.length} expenses for trip ${tripId}.`);
+      return expensesArray;
+    }
+    console.log(`[tripService] getExpensesForTripFromDb: No expenses found for trip ${tripId}.`);
+    return [];
+  } catch (error: any) {
+    console.error(`[tripService] getExpensesForTripFromDb: Error fetching expenses for trip ${tripId}:`, error.message);
+    return [];
+  }
+}
+
+export async function updateExpenseInDb(tripId: string, expenseId: string, expenseData: Partial<Omit<Expense, 'id' | 'tripId'>>): Promise<boolean> {
+  if (!tripId || !expenseId) {
+    console.error("[tripService] updateExpenseInDb: Trip ID and Expense ID are required.");
+    return false;
+  }
+  try {
+    const expenseRef = ref(database, `trips/${tripId}/expenses/${expenseId}`);
+    await update(expenseRef, expenseData);
+    console.log(`[tripService] updateExpenseInDb: Expense ${expenseId} updated in trip ${tripId}`);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] updateExpenseInDb: Error updating expense ${expenseId} in trip ${tripId}:`, error.message);
+    return false;
+  }
+}
+
+export async function deleteExpenseFromDb(tripId: string, expenseId: string): Promise<boolean> {
+  if (!tripId || !expenseId) {
+    console.error("[tripService] deleteExpenseFromDb: Trip ID and Expense ID are required.");
+    return false;
+  }
+  try {
+    const expenseRef = ref(database, `trips/${tripId}/expenses/${expenseId}`);
+    await remove(expenseRef);
+    console.log(`[tripService] deleteExpenseFromDb: Expense ${expenseId} deleted from trip ${tripId}`);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] deleteExpenseFromDb: Error deleting expense ${expenseId} from trip ${tripId}:`, error.message);
     return false;
   }
 }

@@ -14,6 +14,9 @@ export interface Trip {
   members: {
     [uid: string]: TripMember;
   };
+  expenses?: { // Optional: to store expenses directly or references
+    [expenseId: string]: Expense;
+  };
   // Optional: Add other trip-specific data here like itineraryId, expensesId etc.
 }
 
@@ -30,7 +33,7 @@ export interface Expense {
   currency: string;
   category: string;
   paidByUserId: string;
-  date: string;
+  date: string; // Store as ISO string e.g. YYYY-MM-DD
   participantIds: string[];
-  tripId: string; // Added tripId
+  tripId: string; 
 }

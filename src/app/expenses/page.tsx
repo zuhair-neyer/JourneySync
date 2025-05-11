@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, Download, Bell, CreditCard, CheckCircle, Send, Target, PieChart as LucidePieChartIcon, Filter } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, Download, Bell, CreditCard, CheckCircle, Send, Target, PieChart as LucidePieChartIcon, Filter, Loader2 } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import { useTripContext } from '@/contexts/TripContext';
 import Image from 'next/image';
@@ -17,8 +17,9 @@ import { Pie, Cell, PieLabelRenderProps, PieChart, ResponsiveContainer, Legend }
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
-import type { Expense } from '@/types'; // Import updated Expense type
+import type { Expense } from '@/types';
 import { Separator } from '@/components/ui/separator';
+import { addExpenseToDb, getExpensesForTripFromDb, updateExpenseInDb, deleteExpenseFromDb } from '@/firebase/tripService';
 
 
 interface User {
@@ -30,7 +31,7 @@ interface User {
 interface Balance {
   userId: string;
   userName: string;
-  netBalance: number; // Positive if owed by group, negative if owes to group
+  netBalance: number; 
   totalPaid: number;
   totalShare: number;
   isSettled: boolean;
@@ -63,10 +64,9 @@ export default function ExpensesPage() {
   const { userTrips, selectedTripId, setSelectedTripId, isLoadingUserTrips, selectedTrip } = useTripContext();
   const { toast } = useToast();
   
-  // Global users list (could be fetched or include more details from a user service)
   const [users, setUsers] = useState<User[]>([]); 
-  const [allExpenses, setAllExpenses] = useState<Expense[]>([]); // Stores all expenses across trips
-  const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]); // Expenses for the selected trip
+  const [expensesForSelectedTrip, setExpensesForSelectedTrip] = useState<Expense[]>([]);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
   
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [currentExpense, setCurrentExpense] = useState<Partial<Expense>>({ currency: 'USD', category: expenseCategories[0] });
@@ -79,7 +79,6 @@ export default function ExpensesPage() {
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
   const [budgetInput, setBudgetInput] = useState<string>("");
 
-  // Initialize global users list (e.g. with current user and any known associates/mock data)
   useEffect(() => {
     const mockUsers: User[] = [
       { id: 'user2', name: 'Alice Wonderland' },
@@ -90,26 +89,35 @@ export default function ExpensesPage() {
     } else {
       setUsers([{ id: 'user1', name: 'Guest User (You)'}, ...mockUsers]);
     }
-    
-    // Start with no mock expenses for truly empty state
-    // const initialExpenses: Expense[] = []; 
-    // setAllExpenses(initialExpenses);
   }, [currentUser]); 
 
-  // Filter expenses whenever selectedTripId or allExpenses change
-  useEffect(() => {
+  const fetchTripExpenses = useCallback(async () => {
     if (selectedTripId) {
-      setFilteredExpenses(allExpenses.filter(exp => exp.tripId === selectedTripId));
+      setIsLoadingExpenses(true);
+      try {
+        const fetchedExpenses = await getExpensesForTripFromDb(selectedTripId);
+        setExpensesForSelectedTrip(fetchedExpenses);
+      } catch (error) {
+        console.error("Failed to fetch expenses:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load expenses for this trip." });
+        setExpensesForSelectedTrip([]);
+      } finally {
+        setIsLoadingExpenses(false);
+      }
     } else {
-      setFilteredExpenses([]);
+      setExpensesForSelectedTrip([]); 
     }
-  }, [selectedTripId, allExpenses]);
+  }, [selectedTripId, toast]);
 
-  // Derive users for the selected trip to be used in various places
+  useEffect(() => {
+    fetchTripExpenses();
+  }, [fetchTripExpenses]);
+
+
   const usersInCurrentTrip = useMemo(() => {
     if (selectedTrip && selectedTrip.members) {
       return Object.values(selectedTrip.members).map(member => {
-        const fullUser = users.find(u => u.id === member.uid); // Get details from global `users` if available
+        const fullUser = users.find(u => u.id === member.uid); 
         return {
           id: member.uid,
           name: fullUser?.name || member.name || `User...${member.uid.slice(-4)}`,
@@ -123,9 +131,9 @@ export default function ExpensesPage() {
 
   const calculateBalancesAndTotal = useCallback(() => {
     const activeUsers = usersInCurrentTrip;
-    const expensesToProcess = filteredExpenses;
+    const currentExpenses = expensesForSelectedTrip;
 
-    if (!selectedTripId || activeUsers.length === 0 || expensesToProcess.length === 0) {
+    if (!selectedTripId || activeUsers.length === 0 || currentExpenses.length === 0) {
       setBalances([]);
       setTotalGroupExpense(0);
       return;
@@ -138,7 +146,7 @@ export default function ExpensesPage() {
       userExpensesSummary[user.id] = { paid: 0, share: 0 };
     });
 
-    expensesToProcess.forEach(expense => {
+    currentExpenses.forEach(expense => {
       newTotalGroupExpense += expense.amount;
       if (userExpensesSummary[expense.paidByUserId] && activeUsers.some(u => u.id === expense.paidByUserId)) {
         userExpensesSummary[expense.paidByUserId].paid += expense.amount;
@@ -168,7 +176,7 @@ export default function ExpensesPage() {
 
     setBalances(newBalances);
     setTotalGroupExpense(newTotalGroupExpense);
-  }, [filteredExpenses, usersInCurrentTrip, settledStatus, selectedTripId]);
+  }, [expensesForSelectedTrip, usersInCurrentTrip, settledStatus, selectedTripId]);
 
   useEffect(() => {
     calculateBalancesAndTotal();
@@ -205,7 +213,7 @@ export default function ExpensesPage() {
     });
   };
 
-  const handleSubmitExpense = () => {
+  const handleSubmitExpense = async () => {
     if (!selectedTripId) {
       toast({ variant: "destructive", title: "Error", description: "Please select a trip before adding an expense." });
       return;
@@ -215,18 +223,36 @@ export default function ExpensesPage() {
       return;
     }
 
-    const expenseWithTripId = { ...currentExpense, tripId: selectedTripId } as Expense;
-
+    const expenseDataToSave: Omit<Expense, 'id' | 'tripId'> = {
+      description: currentExpense.description,
+      amount: currentExpense.amount,
+      currency: currentExpense.currency!,
+      category: currentExpense.category!,
+      paidByUserId: currentExpense.paidByUserId,
+      date: currentExpense.date,
+      participantIds: currentExpense.participantIds!,
+    };
+    
+    let success = false;
     if (editingExpenseId) {
-      setAllExpenses(allExpenses.map(exp => exp.id === editingExpenseId ? {...expenseWithTripId, id: editingExpenseId } : exp));
-      toast({ title: "Success", description: "Expense updated." });
+      success = await updateExpenseInDb(selectedTripId, editingExpenseId, expenseDataToSave);
+      if (success) toast({ title: "Success", description: "Expense updated." });
     } else {
-      setAllExpenses([...allExpenses, { ...expenseWithTripId, id: Date.now().toString() }]);
-      toast({ title: "Success", description: "Expense added." });
+      const newExpenseId = await addExpenseToDb(selectedTripId, expenseDataToSave);
+      if (newExpenseId) {
+        success = true;
+        toast({ title: "Success", description: "Expense added." });
+      }
     }
-    setIsExpenseDialogOpen(false);
-    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: usersInCurrentTrip.map(u => u.id) }); 
-    setEditingExpenseId(null);
+
+    if (success) {
+      fetchTripExpenses(); // Refetch expenses for the current trip
+      setIsExpenseDialogOpen(false);
+      setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: usersInCurrentTrip.map(u => u.id) }); 
+      setEditingExpenseId(null);
+    } else {
+      toast({ variant: "destructive", title: "Error", description: `Failed to ${editingExpenseId ? 'update' : 'add'} expense.` });
+    }
   };
 
   const handleEditExpense = (expense: Expense) => {
@@ -235,9 +261,15 @@ export default function ExpensesPage() {
     setIsExpenseDialogOpen(true);
   };
 
-  const handleDeleteExpense = (id: string) => {
-    setAllExpenses(allExpenses.filter(exp => exp.id !== id));
-    toast({ title: "Success", description: "Expense deleted." });
+  const handleDeleteExpense = async (id: string) => {
+    if (!selectedTripId) return;
+    const success = await deleteExpenseFromDb(selectedTripId, id);
+    if (success) {
+      toast({ title: "Success", description: "Expense deleted." });
+      fetchTripExpenses(); // Refetch expenses
+    } else {
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete expense." });
+    }
   };
 
   const openNewExpenseDialog = () => {
@@ -287,7 +319,7 @@ export default function ExpensesPage() {
 
   const expenseDataForChart = expenseCategories.map(category => ({
     name: category,
-    total: filteredExpenses 
+    total: expensesForSelectedTrip 
       .filter(exp => exp.category === category)
       .reduce((sum, exp) => sum + exp.amount, 0),
     fill: categoryColors[category] || 'hsl(var(--muted))',
@@ -435,7 +467,7 @@ export default function ExpensesPage() {
                 </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-                <Label htmlFor="budgetAmount">Budget Amount ({filteredExpenses.length > 0 ? filteredExpenses[0].currency : 'USD'})</Label>
+                <Label htmlFor="budgetAmount">Budget Amount ({expensesForSelectedTrip.length > 0 ? expensesForSelectedTrip[0].currency : 'USD'})</Label>
                 <Input 
                     id="budgetAmount" 
                     type="number" 
@@ -460,7 +492,7 @@ export default function ExpensesPage() {
                 <CardTitle className="text-lg text-primary">Total Expenses for {selectedTrip?.name}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{totalGroupExpense.toFixed(2)} <span className="text-sm text-muted-foreground">{filteredExpenses.length > 0 ? filteredExpenses[0].currency : 'USD'}</span></p>
+                <p className="text-3xl font-bold">{totalGroupExpense.toFixed(2)} <span className="text-sm text-muted-foreground">{expensesForSelectedTrip.length > 0 ? expensesForSelectedTrip[0].currency : 'USD'}</span></p>
                 <p className="text-xs text-muted-foreground"> (Assumes all expenses are in the first expense's currency or manually converted by user)</p>
               </CardContent>
             </Card>
@@ -471,7 +503,7 @@ export default function ExpensesPage() {
                 <CardContent>
                     {tripBudget !== null ? (
                         <>
-                            <p className="text-2xl font-bold">{tripBudget.toFixed(2)} <span className="text-sm text-muted-foreground">{filteredExpenses.length > 0 ? filteredExpenses[0].currency : 'USD'}</span></p>
+                            <p className="text-2xl font-bold">{tripBudget.toFixed(2)} <span className="text-sm text-muted-foreground">{expensesForSelectedTrip.length > 0 ? expensesForSelectedTrip[0].currency : 'USD'}</span></p>
                             <Progress value={budgetProgress} className="mt-2 h-3" />
                             <p className="text-xs text-muted-foreground mt-1">
                                 Spent: {totalGroupExpense.toFixed(2)} ({budgetProgress.toFixed(1)}%)
@@ -495,7 +527,11 @@ export default function ExpensesPage() {
                 <CardTitle className="text-lg text-primary">Expenses by Category for {selectedTrip?.name}</CardTitle>
               </CardHeader>
               <CardContent className="h-[200px] pt-0">
-                {expenseDataForChart.length > 0 ? (
+                 {isLoadingExpenses ? (
+                    <div className="flex items-center justify-center h-full">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                ) : expenseDataForChart.length > 0 ? (
                   <ChartContainer config={chartConfig} className="h-full w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -531,7 +567,11 @@ export default function ExpensesPage() {
               <CardDescription>Summary of who owes money or is owed money. "Mark as Settled" helps track when debts are cleared.</CardDescription>
             </CardHeader>
             <CardContent>
-              {balances.length > 0 ? (
+              {isLoadingExpenses ? (
+                 <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                 </div>
+              ) : balances.length > 0 ? (
                 <ul className="space-y-3">
                   {balances.map(balance => (
                     <li key={balance.userId} className="p-3 rounded-lg border bg-background">
@@ -586,7 +626,12 @@ export default function ExpensesPage() {
             </Button>
           </div>
           
-          {filteredExpenses.length === 0 && (
+          {isLoadingExpenses ? (
+            <div className="flex items-center justify-center py-8">
+                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                 <p className="ml-3 text-muted-foreground">Loading expenses...</p>
+            </div>
+          ) : expensesForSelectedTrip.length === 0 ? (
             <Card className="text-center p-8 shadow-md bg-card">
                 <CardHeader>
                 <CardTitle className="text-2xl text-muted-foreground">No Expenses Logged for {selectedTrip?.name}</CardTitle>
@@ -605,37 +650,38 @@ export default function ExpensesPage() {
                 />
                 </CardContent>
             </Card>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {expensesForSelectedTrip.map(expense => {
+                    const paidByUser = usersInCurrentTrip.find(u => u.id === expense.paidByUserId) || users.find(u => u.id === expense.paidByUserId) ; 
+                    const CategoryIcon = categoryIcons[expense.category] || DollarSign;
+                    return (
+                    <Card key={expense.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col bg-card">
+                        <CardHeader>
+                        <div className="flex justify-between items-start">
+                            <CardTitle className="text-lg text-primary flex items-center"><CategoryIcon className="w-5 h-5 mr-2 text-accent" />{expense.description}</CardTitle>
+                            <span className="text-xl font-bold text-foreground">{expense.amount.toFixed(2)} <span className="text-xs text-muted-foreground">{expense.currency}</span></span>
+                        </div>
+                        <CardDescription>Category: {expense.category} | Date: {expense.date}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-grow text-sm">
+                        <p className="text-muted-foreground">Paid by: <span className="font-medium text-foreground">{paidByUser?.name || 'Unknown User'}</span></p>
+                        <p className="text-muted-foreground mt-1">Participants: <span className="font-medium text-foreground">{expense.participantIds.map(pid => (usersInCurrentTrip.find(u=>u.id===pid) || users.find(u=>u.id===pid))?.name || 'Unknown').join(', ')}</span></p>
+                        
+                        </CardContent>
+                        <CardFooter className="flex justify-end gap-2 border-t pt-4">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditExpense(expense)} className="text-muted-foreground hover:text-primary">
+                            <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(expense.id)} className="text-muted-foreground hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                        </CardFooter>
+                    </Card>
+                    );
+                })}
+            </div>
           )}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filteredExpenses.map(expense => {
-                const paidByUser = usersInCurrentTrip.find(u => u.id === expense.paidByUserId) || users.find(u => u.id === expense.paidByUserId) ; 
-                const CategoryIcon = categoryIcons[expense.category] || DollarSign;
-                return (
-                <Card key={expense.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col bg-card">
-                    <CardHeader>
-                    <div className="flex justify-between items-start">
-                        <CardTitle className="text-lg text-primary flex items-center"><CategoryIcon className="w-5 h-5 mr-2 text-accent" />{expense.description}</CardTitle>
-                        <span className="text-xl font-bold text-foreground">{expense.amount.toFixed(2)} <span className="text-xs text-muted-foreground">{expense.currency}</span></span>
-                    </div>
-                    <CardDescription>Category: {expense.category} | Date: {expense.date}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-grow text-sm">
-                    <p className="text-muted-foreground">Paid by: <span className="font-medium text-foreground">{paidByUser?.name || 'Unknown User'}</span></p>
-                    <p className="text-muted-foreground mt-1">Participants: <span className="font-medium text-foreground">{expense.participantIds.map(pid => (usersInCurrentTrip.find(u=>u.id===pid) || users.find(u=>u.id===pid))?.name || 'Unknown').join(', ')}</span></p>
-                    
-                    </CardContent>
-                    <CardFooter className="flex justify-end gap-2 border-t pt-4">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditExpense(expense)} className="text-muted-foreground hover:text-primary">
-                        <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(expense.id)} className="text-muted-foreground hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
-                    </CardFooter>
-                </Card>
-                );
-            })}
-          </div>
         </>
       ) : (
         <Card className="text-center p-8 shadow-md bg-card">
