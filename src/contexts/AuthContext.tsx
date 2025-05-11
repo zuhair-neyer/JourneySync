@@ -54,6 +54,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       console.log("[AuthContext] onAuthStateChanged triggered. User:", user ? { uid: user.uid, email: user.email, displayName: user.displayName } : null);
+      // Ensure a new object is created to trigger state updates in consuming components
       setCurrentUser(user ? { ...user } as FirebaseUser : null);
       setLoading(false);
     });
@@ -70,23 +71,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       if (userCredential.user) {
         const userToUpdate = userCredential.user;
-        console.log("[AuthContext] signUp: User created. UID:", userToUpdate.uid, "Current displayName:", userToUpdate.displayName);
-        console.log("[AuthContext] signUp: Attempting to update profile with name:", name);
+        console.log("[AuthContext] signUp: User created. UID:", userToUpdate.uid, "Initial displayName:", userToUpdate.displayName);
         
-        await updateProfile(userToUpdate, {
-          displayName: name,
-        });
+        console.log("[AuthContext] signUp: Attempting to update profile with name:", name);
+        await updateProfile(userToUpdate, { displayName: name });
         console.log("[AuthContext] signUp: updateProfile call completed.");
         
+        // Crucial: Reload the user to get the updated profile information from Firebase
         await userToUpdate.reload(); 
-        console.log("[AuthContext] signUp: User reloaded. New displayName from userToUpdate object:", userToUpdate.displayName);
+        console.log("[AuthContext] signUp: User reloaded. New displayName from reloaded userToUpdate object:", userToUpdate.displayName);
         
+        // Update the auth context's currentUser with the reloaded user object
+        // Creating a new object for setCurrentUser ensures React detects the change.
         setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
-        console.log("[AuthContext] signUp: currentUser state updated in context. New displayName:", auth.currentUser?.displayName);
+        // Log displayName from auth.currentUser to see if it's reflected there too.
+        console.log("[AuthContext] signUp: currentUser state updated in context. New displayName from auth.currentUser after reload and setCurrentUser:", auth.currentUser?.displayName);
         
         toast({ title: "Success", description: "Account created successfully!" });
         router.push('/'); 
-        return userToUpdate;
+        return userToUpdate; // Return the reloaded user
       }
       console.warn("[AuthContext] signUp: userCredential.user was null after creation.");
       return null; 
@@ -160,9 +163,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const userToUpdate = auth.currentUser;
       await updateProfile(userToUpdate, { displayName: name });
+      // Crucial: Reload the user to get the updated profile information
       await userToUpdate.reload();
-      console.log("[AuthContext] updateUserProfile: Profile updated and reloaded. New displayName:", userToUpdate.displayName);
+      console.log("[AuthContext] updateUserProfile: Profile updated and reloaded. New displayName from reloaded user:", userToUpdate.displayName);
+      // Ensure a new object is passed to setCurrentUser to trigger re-renders
       setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
+      console.log("[AuthContext] updateUserProfile: currentUser state updated. New displayName from auth.currentUser:", auth.currentUser?.displayName);
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
       const authError = e as AuthError;
