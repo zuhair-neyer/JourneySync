@@ -70,15 +70,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await updateProfile(userCredential.user, {
           displayName: name,
         });
+        // Reload the user to ensure the profile update (displayName) is reflected in auth.currentUser
+        await userCredential.user.reload();
         // Fetch the latest user object which should include the updated profile
-        // This ensures that the local currentUser state is definitively updated with the new displayName.
         const updatedUser = auth.currentUser; 
         setCurrentUser(updatedUser);
       }
       
       toast({ title: "Success", description: "Account created successfully!" });
       router.push('/'); 
-      return auth.currentUser; // Return the potentially updated currentUser
+      return auth.currentUser;
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
@@ -137,6 +138,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setError(null);
     try {
       await updateProfile(auth.currentUser, { displayName: name });
+      // Reload the user to ensure the profile update (displayName) is reflected
+      await auth.currentUser.reload();
       // Update local currentUser state by re-fetching from auth.currentUser
       setCurrentUser(auth.currentUser ? { ...auth.currentUser } as FirebaseUser : null);
       toast({ title: "Success", description: "Profile updated successfully!" });
