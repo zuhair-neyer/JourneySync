@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -48,7 +49,8 @@ export function CreateTripForm() {
       setTripName('');
       refreshUserTrips();
     } else {
-      toast({ variant: "destructive", title: "Error", description: "Failed to create trip. Please try again." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to create trip. Please check server logs for details." });
+      console.error("Client-side: createTripInDb returned null. This usually indicates a server-side error with Firebase (e.g., permission denied, misconfiguration). Check your Next.js server console logs for detailed Firebase error messages from 'tripService.ts'.");
     }
   };
 

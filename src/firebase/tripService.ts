@@ -1,3 +1,4 @@
+
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo } from '@/types';
@@ -61,8 +62,9 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
   } catch (error: any) {
     console.error("[tripService] ERROR creating trip:", error.message, "(Code:", error.code || 'N/A', ")");
     if (error.code === 'PERMISSION_DENIED') {
-        console.error("[tripService] PERMISSION DENIED. Check Firebase Realtime Database rules for /trips/ and /users/ paths.");
+        console.error("[tripService] PERMISSION DENIED. This is a critical error. Please check your Firebase Realtime Database rules for the '/trips' and '/users' paths. Ensure authenticated users have write permissions to 'trips/{newTripId}' and 'users/{userId}/trips/{newTripId}'.");
     }
+    // Other potential errors could be network issues, data validation issues if rules are complex, or quota limits.
     return null;
   }
 }
@@ -92,6 +94,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
 
     if (tripData.members && tripData.members[userInfo.uid]) {
       console.log("[tripService] User is already a member of this trip:", tripId);
+      // Ensure the user's local trip list is consistent
       const userTripRef = ref(database, `users/${userInfo.uid}/trips/${tripId}`);
       const userTripSnapshot = await get(userTripRef);
       if (!userTripSnapshot.exists() || userTripSnapshot.val().name !== tripData.name) {
@@ -112,10 +115,11 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
         return false; 
     }
 
+    // Using 'update' for atomic multi-path updates
     const updates: { [key: string]: any } = {};
     updates[`/trips/${tripId}/members/${userInfo.uid}`] = memberData;
     updates[`/users/${userInfo.uid}/trips/${tripId}`] = {
-      name: tripData.name, 
+      name: tripData.name, // Make sure to use the actual trip name
       role: 'member',
     };
     
@@ -125,7 +129,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
   } catch (error: any) {
     console.error("[tripService] ERROR joining trip:", error.message, "(Code:", error.code || 'N/A', ")");
     if (error.code === 'PERMISSION_DENIED') {
-         console.error("[tripService] PERMISSION DENIED. Check Firebase Realtime Database rules for /trips/ and /users/ paths.");
+         console.error("[tripService] PERMISSION DENIED. Check Firebase Realtime Database rules. Ensure authenticated users can read 'trips/{tripId}' and write to 'trips/{tripId}/members/{userId}' and 'users/{userId}/trips/{tripId}'.");
     }
     return false;
   }
@@ -155,7 +159,7 @@ export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]
   } catch (error: any) {
     console.error("[tripService] Error fetching user trips for UserID:", userId, "Error:", error.message, "(Code:", error.code || 'N/A', ")");
     if (error.code === 'PERMISSION_DENIED') {
-        console.error("[tripService] PERMISSION DENIED while fetching user trips. Check rules for /users/" + userId + "/trips");
+        console.error("[tripService] PERMISSION DENIED while fetching user trips. Check rules for reading '/users/" + userId + "/trips'.");
     }
     return [];
   }
@@ -180,8 +184,9 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
   } catch (error: any) {
     console.error("[tripService] Error fetching trip details for TripID:", tripId, "Error:", error.message, "(Code:", error.code || 'N/A', ")");
      if (error.code === 'PERMISSION_DENIED') {
-        console.error("[tripService] PERMISSION DENIED while fetching trip details. Check rules for /trips/" + tripId);
+        console.error("[tripService] PERMISSION DENIED while fetching trip details. Check rules for reading '/trips/" + tripId + "'.");
     }
     return null;
   }
 }
+
