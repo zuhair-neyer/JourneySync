@@ -2,14 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListChecks, MapPin, Sparkles, Luggage, UsersRound, DollarSign } from "lucide-react";
+import { ListChecks, Sparkles, Luggage, UsersRound, DollarSign } from "lucide-react"; // Removed MapPin
 import Image from "next/image";
 import Link from "next/link";
 
 export default function DashboardPage() {
   const features = [
     { name: "Collaborative Itinerary", icon: ListChecks, href: "/itinerary", description: "Plan your trip together in real-time." },
-    { name: "Interactive Map", icon: MapPin, href: "/map", description: "Pin locations and visualize your journey." },
+    // { name: "Interactive Map", icon: MapPin, href: "/map", description: "Pin locations and visualize your journey." }, // Removed Map feature
     { name: "Smart Recommendations", icon: Sparkles, href: "/recommendations", description: "Get AI-powered local suggestions." },
     { name: "Packing Checklist", icon: Luggage, href: "/packing-list", description: "Create and manage your packing lists." },
     { name: "Group Polls", icon: UsersRound, href: "/polls", description: "Make group decisions easily." },
