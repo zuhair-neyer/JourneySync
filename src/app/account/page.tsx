@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -12,9 +12,20 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, UserCog, Shield, MailCheck, MailWarning } from 'lucide-react'; 
+import { Loader2, UserCog, Shield, MailCheck, MailWarning, Trash2, AlertTriangle } from 'lucide-react'; 
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const updateNameSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
@@ -39,10 +50,12 @@ export default function AccountPage() {
     setError: setAuthError, 
     updateUserProfile, 
     updateUserPassword,
-    resendVerificationEmail 
+    resendVerificationEmail,
+    deleteUserAccount 
   } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const nameForm = useForm<UpdateNameFormValues>({
     resolver: zodResolver(updateNameSchema),
@@ -65,13 +78,11 @@ export default function AccountPage() {
     }
     if (currentUser) {
         nameForm.reset({ name: currentUser.displayName || "" });
-        console.log("[AccountPage] useEffect: currentUser.displayName set in form:", currentUser.displayName, "Email Verified:", currentUser.emailVerified);
     }
   }, [currentUser, authLoading, router, nameForm]);
 
 
   const onUpdateNameSubmit = async (data: UpdateNameFormValues) => {
-    console.log("[AccountPage] onUpdateNameSubmit: Attempting to update name to:", data.name);
     if (!data.name.trim()) {
         toast({ variant: "destructive", title: "Validation Error", description: "Name cannot be empty or just spaces." });
         nameForm.setError("name", { type: "manual", message: "Name cannot be empty or just spaces." });
@@ -84,6 +95,16 @@ export default function AccountPage() {
     await updateUserPassword(data.newPassword);
     passwordForm.reset(); 
   };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    await deleteUserAccount();
+    // AuthContext's deleteUserAccount should handle logout and redirect.
+    // If not, or for safety:
+    // router.push('/login'); // Or a "goodbye" page
+    setIsDeleting(false);
+  };
+
 
   if (authLoading || !currentUser) {
     return (
@@ -158,7 +179,7 @@ export default function AccountPage() {
 
       <Separator className="my-8" />
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg mb-8">
         <CardHeader>
           <CardTitle className="text-xl flex items-center"><Shield className="mr-2 h-6 w-6" /> Change Password</CardTitle> 
           <CardDescription>Update your account password. Make sure it's strong and unique.</CardDescription>
@@ -192,7 +213,7 @@ export default function AccountPage() {
                   </FormItem>
                 )}
               />
-              {authError && <p className="text-sm font-medium text-destructive">{authError}</p>}
+              {authError && passwordForm.formState.isSubmitted && <p className="text-sm font-medium text-destructive">{authError}</p>}
               <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={passwordForm.formState.isSubmitting || authLoading}>
                 {passwordForm.formState.isSubmitting || authLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Password"}
               </Button>
@@ -200,7 +221,46 @@ export default function AccountPage() {
           </Form>
         </CardContent>
       </Card>
+
+      <Separator className="my-8" />
+
+      <Card className="shadow-lg border-destructive">
+        <CardHeader>
+          <CardTitle className="text-xl flex items-center text-destructive"><AlertTriangle className="mr-2 h-6 w-6" /> Delete Account</CardTitle> 
+          <CardDescription>Permanently delete your account and all associated data. This action cannot be undone.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={isDeleting || authLoading}>
+                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete My Account
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete your account and remove your data from our servers. 
+                  This includes your profile, trip memberships, and any expenses you've logged.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={handleDeleteAccount} 
+                  disabled={isDeleting}
+                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                >
+                  {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Yes, delete my account"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          {authError && isDeleting && <p className="mt-4 text-sm font-medium text-destructive">{authError}</p>}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }
-

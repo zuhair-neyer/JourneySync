@@ -1,3 +1,4 @@
+
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo, Expense } from '@/types';
@@ -11,33 +12,24 @@ interface BasicUserInfo {
 }
 
 function generateMemberName(userInfo: BasicUserInfo): string {
-  console.log("[tripService] generateMemberName: Input userInfo.displayName:", userInfo.displayName, "Input userInfo.email:", userInfo.email, "Input userInfo.uid:", userInfo.uid);
-  
   const displayName = userInfo.displayName?.trim();
   
   if (displayName && displayName !== "" && displayName.toLowerCase() !== "anonymous user") {
-    console.log("[tripService] generateMemberName: Using displayName:", displayName);
     return displayName;
   }
 
   if (userInfo.email) {
     const emailNamePart = userInfo.email.split('@')[0];
     if (emailNamePart && emailNamePart.trim() !== "") {
-      console.log("[tripService] generateMemberName: Using email prefix:", emailNamePart);
       return emailNamePart;
     }
   }
   
   const fallbackName = `User...${userInfo.uid.substring(userInfo.uid.length - 4)}`;
-  console.log("[tripService] generateMemberName: Using fallback (uid-based):", fallbackName);
   return fallbackName;
 }
 
 export async function createTripInDb(tripName: string, userInfo: BasicUserInfo): Promise<string | null> {
-  console.log("[tripService] createTripInDb: Received userInfo:", JSON.stringify(userInfo));
-  console.log("[tripService] createTripInDb: Attempting to create trip. Name:", tripName, "User ID:", userInfo.uid, "Display Name from userInfo for create:", userInfo.displayName);
-
-
   if (!tripName.trim()) {
     console.error("[tripService] createTripInDb: Trip name cannot be empty.");
     return null;
@@ -48,13 +40,11 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
   }
 
   const memberName = generateMemberName(userInfo);
-  console.log("[tripService] createTripInDb: Generated memberName for trip creator:", memberName);
 
   if (!memberName || memberName.trim() === "") {
-     console.error("[tripService] createTripInDb: CRITICAL: Generated member name is empty. This should not happen with the new generateMemberName logic.");
+     console.error("[tripService] createTripInDb: CRITICAL: Generated member name is empty.");
      return null;
   }
-
 
   try {
     const tripsRef = ref(database, 'trips');
@@ -78,7 +68,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
           joinedAt: serverTimestamp() as any, 
         },
       },
-      expenses: {}, // Initialize expenses node
+      expenses: {},
     };
     await set(newTripRef, newTripData);
 
@@ -88,8 +78,6 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       role: 'creator',
     };
     await set(userTripRef, userTripInfoData);
-
-    console.log("[tripService] createTripInDb: SUCCEEDED for tripId:", tripId, "with memberName:", memberName);
     return tripId;
   } catch (error: any) {
     console.error("[tripService] createTripInDb: ERROR creating trip:", error.message, "(Code:", error.code || 'N/A', ")");
@@ -101,9 +89,6 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
 }
 
 export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Promise<boolean> {
-  console.log("[tripService] joinTripInDb: Received userInfo:", JSON.stringify(userInfo));
-  console.log("[tripService] joinTripInDb: Attempting to join trip. TripID:", tripId, "User ID:", userInfo.uid, "Display Name from userInfo for join:", userInfo.displayName);
-
   if (!tripId.trim()) {
     console.error("[tripService] joinTripInDb: Trip ID cannot be empty for joining.");
     return false;
@@ -114,10 +99,9 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
   }
   
   const memberName = generateMemberName(userInfo); 
-  console.log("[tripService] joinTripInDb: Generated memberName for joining user:", memberName);
 
   if (!memberName || memberName.trim() === "") {
-     console.error("[tripService] joinTripInDb: CRITICAL: Generated member name is empty for joining user. This should not happen.");
+     console.error("[tripService] joinTripInDb: CRITICAL: Generated member name is empty for joining user.");
      return false;
   }
 
@@ -133,7 +117,6 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; 
 
     if (tripData.members && tripData.members[userInfo.uid]) {
-      console.log("[tripService] joinTripInDb: User is already a member of this trip:", tripId);
       const existingMemberData = tripData.members[userInfo.uid];
       const updatesForExistingMember: Partial<TripMember> = {};
       let consistencyUpdatesNeeded = false;
@@ -144,7 +127,6 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       if (existingMemberData.name !== memberName && (newNameIsBetter || currentNameIsFallback)) {
         updatesForExistingMember.name = memberName;
         consistencyUpdatesNeeded = true;
-        console.log(`[tripService] joinTripInDb: Updating member name in trip ${tripId} from '${existingMemberData.name}' to '${memberName}'`);
       }
       
       if (consistencyUpdatesNeeded) {
@@ -159,7 +141,6 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       if (!userTripSnapshot.exists() || 
           userTripSnapshot.val().name !== expectedNameInUserTrips || 
           userTripSnapshot.val().role !== expectedRole) {
-         console.log("[tripService] joinTripInDb: Updating user's local trip entry for consistency for tripId:", tripId);
          await set(userTripRef, { name: expectedNameInUserTrips, role: expectedRole });
       }
       return true; 
@@ -185,7 +166,6 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     };
     
     await update(ref(database), updates);
-    console.log("[tripService] joinTripInDb: Successfully joined trip:", tripId, "as memberName:", memberName);
     return true;
   } catch (error: any) {
     console.error("[tripService] joinTripInDb: ERROR joining trip:", error.message, "(Code:", error.code || 'N/A', ")");
@@ -197,9 +177,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
 }
 
 export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]> {
-  console.log("[tripService] getUserTripsFromDb: Fetching user trips for userId:", userId);
   if (!userId) {
-    console.warn("[tripService] getUserTripsFromDb called with no userId.");
     return [];
   }
   try {
@@ -212,10 +190,8 @@ export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]
         name: tripsData[tripId].name,
         role: tripsData[tripId].role,
       }));
-      console.log(`[tripService] getUserTripsFromDb: Found ${userTripsArray.length} trips for user ${userId}.`);
       return userTripsArray;
     }
-    console.log("[tripService] getUserTripsFromDb: No trips found for userId:", userId);
     return [];
   } catch (error: any) {
     console.error("[tripService] getUserTripsFromDb: Error fetching user trips for UserID:", userId, "Error:", error.message, "(Code:", error.code || 'N/A', ")");
@@ -227,9 +203,7 @@ export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]
 }
 
 export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null> {
-  console.log("[tripService] getTripDetailsFromDb: Fetching trip details for tripId:", tripId);
   if (!tripId) {
-    console.warn("[tripService] getTripDetailsFromDb: called with no tripId.");
     return null;
   }
   try {
@@ -244,7 +218,6 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         const member = members[uid];
         processedMembers[uid] = {
           ...member,
-          // Ensure name is consistently generated if missing or was previously a fallback
           name: member.name && !member.name.startsWith("User...") ? member.name : generateMemberName({ uid, displayName: member.name, email: member.email }),
         };
       }
@@ -253,34 +226,15 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         id: tripId, 
         ...tripData,
         members: processedMembers,
-        // Ensure createdBy is present, potentially fetching creator details if needed, though usually it's just UID
         createdBy: tripData.createdBy,
-        expenses: tripData.expenses || {}, // Ensure expenses node exists
+        expenses: tripData.expenses || {}, 
       } as Trip;
 
-      // Special handling if creator is not in members list (shouldn't happen with current logic but good safeguard)
       if (tripData.createdBy && !processedMembers[tripData.createdBy]) {
-        const creatorSnapshot = await get(ref(database, `users/${tripData.createdBy}`));
-        if (creatorSnapshot.exists()) {
-           // This is a simplified user object, not a full FirebaseUser object.
-           // We'd typically only store basic info or a reference.
-           // For display, we might need to fetch their display name if it's stored differently.
-           // For now, if not in members, we'll assume a fallback.
-           // This part is tricky without knowing how user profiles are fully structured outside trips.
-           // Let's assume generateMemberName can work with just UID if necessary.
-           // However, the creator SHOULD be in the members list.
-           console.warn(`[tripService] getTripDetailsFromDb: Creator ${tripData.createdBy} not found in members list for trip ${tripId}. This is unusual.`);
-        }
+         console.warn(`[tripService] getTripDetailsFromDb: Creator ${tripData.createdBy} not found in members list for trip ${tripId}. This is unusual.`);
       }
-
-
-      console.log(`[tripService] getTripDetailsFromDb: Found trip details for tripId ${tripId}. Member count: ${Object.keys(tripDetails.members || {}).length}. Created by: ${tripDetails.createdBy}`);
-      Object.values(tripDetails.members || {}).forEach(member => {
-        console.log(`[tripService] getTripDetailsFromDb: Member UID: ${member.uid}, Name: ${member.name}, Email: ${member.email}`);
-      });
       return tripDetails;
     }
-    console.log("[tripService] getTripDetailsFromDb: No trip details found for tripId:", tripId);
     return null;
   } catch (error: any) {
     console.error("[tripService] getTripDetailsFromDb: Error fetching trip details for TripID:", tripId, "Error:", error.message, "(Code:", error.code || 'N/A', ")");
@@ -293,7 +247,6 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
 
 
 export async function updateUserDisplayNameInTrips(userId: string, newDisplayName: string): Promise<void> {
-  console.log(`[tripService] updateUserDisplayNameInTrips: Updating display name to "${newDisplayName}" for user ID: ${userId}`);
   if (!userId || !newDisplayName || newDisplayName.trim() === "") {
     console.error("[tripService] updateUserDisplayNameInTrips: User ID or new display name is invalid.");
     return;
@@ -302,7 +255,6 @@ export async function updateUserDisplayNameInTrips(userId: string, newDisplayNam
   try {
     const userTripsSnapshot = await get(ref(database, `users/${userId}/trips`));
     if (!userTripsSnapshot.exists()) {
-      console.log(`[tripService] updateUserDisplayNameInTrips: User ${userId} is not part of any trips. No updates needed.`);
       return;
     }
 
@@ -310,7 +262,6 @@ export async function updateUserDisplayNameInTrips(userId: string, newDisplayNam
     const tripIds = Object.keys(userTripsData);
     
     if (tripIds.length === 0) {
-      console.log(`[tripService] updateUserDisplayNameInTrips: User ${userId} has no trip entries. No updates needed.`);
       return;
     }
 
@@ -326,9 +277,6 @@ export async function updateUserDisplayNameInTrips(userId: string, newDisplayNam
         if (currentMemberData.name !== newDisplayName) {
              updates[memberNamePath] = newDisplayName;
              updatesMade = true;
-             console.log(`[tripService] updateUserDisplayNameInTrips: Queued update for trip ${tripId}, user ${userId} to name "${newDisplayName}"`);
-        } else {
-             console.log(`[tripService] updateUserDisplayNameInTrips: Name in trip ${tripId} for user ${userId} is already "${newDisplayName}". Skipping.`);
         }
       } else {
         console.warn(`[tripService] updateUserDisplayNameInTrips: User ${userId} listed in users/${userId}/trips/${tripId} but not found in trips/${tripId}/members. Skipping name update for this trip.`);
@@ -337,9 +285,6 @@ export async function updateUserDisplayNameInTrips(userId: string, newDisplayNam
     
     if (updatesMade) {
         await update(ref(database), updates);
-        console.log(`[tripService] updateUserDisplayNameInTrips: Successfully updated display name for user ${userId} in relevant trips.`);
-    } else {
-        console.log(`[tripService] updateUserDisplayNameInTrips: No actual name changes required for user ${userId} in their trips.`);
     }
 
   } catch (error: any) {
@@ -351,7 +296,6 @@ export async function updateUserDisplayNameInTrips(userId: string, newDisplayNam
 }
 
 export async function updateTripNameInDb(tripId: string, newTripName: string, memberUids: string[]): Promise<boolean> {
-  console.log(`[tripService] updateTripNameInDb: Updating trip ${tripId} to name "${newTripName}"`);
   if (!tripId || !newTripName.trim()) {
     console.error("[tripService] updateTripNameInDb: Trip ID or new trip name is invalid.");
     return false;
@@ -364,7 +308,6 @@ export async function updateTripNameInDb(tripId: string, newTripName: string, me
     const updates: { [key: string]: any } = {};
     updates[`/trips/${tripId}/name`] = newTripName;
 
-    // Update the name in each member's copy of the trip info under /users/{uid}/trips/{tripId}
     if (memberUids) {
       for (const uid of memberUids) {
         updates[`/users/${uid}/trips/${tripId}/name`] = newTripName;
@@ -372,7 +315,6 @@ export async function updateTripNameInDb(tripId: string, newTripName: string, me
     }
 
     await update(ref(database), updates);
-    console.log(`[tripService] updateTripNameInDb: Successfully updated trip ${tripId} name to "${newTripName}" in main trip object and for all members' lists.`);
     return true;
   } catch (error: any) {
     console.error(`[tripService] updateTripNameInDb: Error updating trip name for ${tripId}:`, error.message, "(Code:", error.code || 'N/A', ")");
@@ -401,7 +343,6 @@ export async function addExpenseToDb(tripId: string, expenseData: Omit<Expense, 
     }
     const expenseToAdd: Omit<Expense, 'tripId'> = { ...expenseData, id: expenseId };
     await set(newExpenseRef, expenseToAdd);
-    console.log(`[tripService] addExpenseToDb: Expense added with ID ${expenseId} to trip ${tripId}`);
     return expenseId;
   } catch (error: any) {
     console.error(`[tripService] addExpenseToDb: Error adding expense to trip ${tripId}:`, error.message);
@@ -411,7 +352,6 @@ export async function addExpenseToDb(tripId: string, expenseData: Omit<Expense, 
 
 export async function getExpensesForTripFromDb(tripId: string): Promise<Expense[]> {
   if (!tripId) {
-    console.warn("[tripService] getExpensesForTripFromDb: called with no tripId.");
     return [];
   }
   try {
@@ -422,12 +362,10 @@ export async function getExpensesForTripFromDb(tripId: string): Promise<Expense[
       const expensesArray: Expense[] = Object.keys(expensesData).map(expenseId => ({
         ...expensesData[expenseId],
         id: expenseId,
-        tripId: tripId, // Ensure tripId is part of the returned expense object
+        tripId: tripId, 
       }));
-      console.log(`[tripService] getExpensesForTripFromDb: Found ${expensesArray.length} expenses for trip ${tripId}.`);
       return expensesArray;
     }
-    console.log(`[tripService] getExpensesForTripFromDb: No expenses found for trip ${tripId}.`);
     return [];
   } catch (error: any) {
     console.error(`[tripService] getExpensesForTripFromDb: Error fetching expenses for trip ${tripId}:`, error.message);
@@ -443,7 +381,6 @@ export async function updateExpenseInDb(tripId: string, expenseId: string, expen
   try {
     const expenseRef = ref(database, `trips/${tripId}/expenses/${expenseId}`);
     await update(expenseRef, expenseData);
-    console.log(`[tripService] updateExpenseInDb: Expense ${expenseId} updated in trip ${tripId}`);
     return true;
   } catch (error: any) {
     console.error(`[tripService] updateExpenseInDb: Error updating expense ${expenseId} in trip ${tripId}:`, error.message);
@@ -459,10 +396,58 @@ export async function deleteExpenseFromDb(tripId: string, expenseId: string): Pr
   try {
     const expenseRef = ref(database, `trips/${tripId}/expenses/${expenseId}`);
     await remove(expenseRef);
-    console.log(`[tripService] deleteExpenseFromDb: Expense ${expenseId} deleted from trip ${tripId}`);
     return true;
   } catch (error: any) {
     console.error(`[tripService] deleteExpenseFromDb: Error deleting expense ${expenseId} from trip ${tripId}:`, error.message);
     return false;
+  }
+}
+
+export async function deleteUserDataFromDb(userId: string): Promise<void> {
+  console.log(`[tripService] deleteUserDataFromDb: Attempting to delete data for user ID: ${userId}`);
+  if (!userId) {
+    console.error("[tripService] deleteUserDataFromDb: User ID is required.");
+    return;
+  }
+
+  const updates: { [key: string]: any } = {};
+  
+  try {
+    // 1. Get all trip IDs the user is part of
+    const userTripsSnapshot = await get(ref(database, `users/${userId}/trips`));
+    if (userTripsSnapshot.exists()) {
+      const userTripsData = userTripsSnapshot.val();
+      const tripIds = Object.keys(userTripsData);
+
+      // 2. For each trip, remove the user from the trip's members list
+      for (const tripId of tripIds) {
+        updates[`/trips/${tripId}/members/${userId}`] = null; // Mark for deletion
+        // Note: More complex cleanup (e.g., reassigning createdBy if user was creator,
+        // handling expenses) is not done here for simplicity.
+        // Expenses paid by this user or where they were participants will remain,
+        // potentially pointing to a non-existent user.
+        // A more robust solution would iterate through expenses in these trips
+        // and anonymize or reattribute them.
+      }
+    }
+
+    // 3. Remove the user's own node under /users/{userId}
+    updates[`/users/${userId}`] = null; // Mark for deletion
+
+    // 4. Perform all deletions in one multi-location update
+    if (Object.keys(updates).length > 0) {
+      await update(ref(database), updates);
+      console.log(`[tripService] deleteUserDataFromDb: Successfully marked data for deletion for user ID: ${userId}`);
+    } else {
+      console.log(`[tripService] deleteUserDataFromDb: No database entries found to delete for user ID: ${userId}`);
+    }
+
+  } catch (error: any) {
+    console.error(`[tripService] deleteUserDataFromDb: Error deleting data for user ${userId}:`, error.message, "(Code:", error.code || 'N/A', ")");
+    if (error.code === 'PERMISSION_DENIED') {
+        console.error("[tripService] deleteUserDataFromDb: PERMISSION DENIED. Check Firebase Realtime Database rules for writing to '/trips' and '/users'.");
+    }
+    // We might want to throw the error here so AuthContext knows DB cleanup failed partially
+    // and can inform the user or handle it differently. For now, just logging.
   }
 }
