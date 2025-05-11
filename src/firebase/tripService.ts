@@ -137,8 +137,6 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       const updatesForExistingMember: Partial<TripMember> = {};
       let consistencyUpdatesNeeded = false;
       
-      // Only update name if it's different and the new name is not the generic fallback (unless current is also fallback)
-      // OR if the existing name is a fallback and the new name is not.
       const newNameIsBetter = memberName && !memberName.startsWith("User...");
       const currentNameIsFallback = existingMemberData.name?.startsWith("User...");
 
@@ -238,7 +236,6 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     const snapshot = await get(tripRef);
     if (snapshot.exists()) {
       const tripData = snapshot.val();
-      // Ensure members object exists
       const members = tripData.members || {};
       const processedMembers: { [uid: string]: TripMember } = {};
 
@@ -246,17 +243,36 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         const member = members[uid];
         processedMembers[uid] = {
           ...member,
-          name: member.name || generateMemberName({ uid, displayName: member.name, email: member.email }),
+          // Ensure name is consistently generated if missing or was previously a fallback
+          name: member.name && !member.name.startsWith("User...") ? member.name : generateMemberName({ uid, displayName: member.name, email: member.email }),
         };
       }
       
       const tripDetails = { 
         id: tripId, 
         ...tripData,
-        members: processedMembers // Use the processed members
+        members: processedMembers,
+        // Ensure createdBy is present, potentially fetching creator details if needed, though usually it's just UID
+        createdBy: tripData.createdBy,
       } as Trip;
 
-      console.log(`[tripService] getTripDetailsFromDb: Found trip details for tripId ${tripId}. Member count: ${Object.keys(tripDetails.members || {}).length}`);
+      // Special handling if creator is not in members list (shouldn't happen with current logic but good safeguard)
+      if (tripData.createdBy && !processedMembers[tripData.createdBy]) {
+        const creatorSnapshot = await get(ref(database, `users/${tripData.createdBy}`));
+        if (creatorSnapshot.exists()) {
+           // This is a simplified user object, not a full FirebaseUser object.
+           // We'd typically only store basic info or a reference.
+           // For display, we might need to fetch their display name if it's stored differently.
+           // For now, if not in members, we'll assume a fallback.
+           // This part is tricky without knowing how user profiles are fully structured outside trips.
+           // Let's assume generateMemberName can work with just UID if necessary.
+           // However, the creator SHOULD be in the members list.
+           console.warn(`[tripService] getTripDetailsFromDb: Creator ${tripData.createdBy} not found in members list for trip ${tripId}. This is unusual.`);
+        }
+      }
+
+
+      console.log(`[tripService] getTripDetailsFromDb: Found trip details for tripId ${tripId}. Member count: ${Object.keys(tripDetails.members || {}).length}. Created by: ${tripDetails.createdBy}`);
       Object.values(tripDetails.members || {}).forEach(member => {
         console.log(`[tripService] getTripDetailsFromDb: Member UID: ${member.uid}, Name: ${member.name}, Email: ${member.email}`);
       });
@@ -300,15 +316,12 @@ export async function updateUserDisplayNameInTrips(userId: string, newDisplayNam
     let updatesMade = false;
 
     for (const tripId of tripIds) {
-      // Check if the member exists in the trip before attempting to update
       const memberNamePath = `/trips/${tripId}/members/${userId}/name`;
       const memberSnapshot = await get(ref(database, `/trips/${tripId}/members/${userId}`));
       
       if (memberSnapshot.exists()) {
-        // Only update if the name is different or if the current name is a fallback
         const currentMemberData = memberSnapshot.val() as TripMember;
-        const currentNameIsFallback = currentMemberData.name?.startsWith("User...");
-        if (currentMemberData.name !== newDisplayName || currentNameIsFallback) {
+        if (currentMemberData.name !== newDisplayName) {
              updates[memberNamePath] = newDisplayName;
              updatesMade = true;
              console.log(`[tripService] updateUserDisplayNameInTrips: Queued update for trip ${tripId}, user ${userId} to name "${newDisplayName}"`);
@@ -332,5 +345,38 @@ export async function updateUserDisplayNameInTrips(userId: string, newDisplayNam
     if (error.code === 'PERMISSION_DENIED') {
         console.error("[tripService] updateUserDisplayNameInTrips: PERMISSION DENIED. Check Firebase Realtime Database rules for writing to '/trips'.");
     }
+  }
+}
+
+export async function updateTripNameInDb(tripId: string, newTripName: string, memberUids: string[]): Promise<boolean> {
+  console.log(`[tripService] updateTripNameInDb: Updating trip ${tripId} to name "${newTripName}"`);
+  if (!tripId || !newTripName.trim()) {
+    console.error("[tripService] updateTripNameInDb: Trip ID or new trip name is invalid.");
+    return false;
+  }
+  if (!memberUids || memberUids.length === 0) {
+    console.warn(`[tripService] updateTripNameInDb: No member UIDs provided for trip ${tripId}. Only updating main trip name.`);
+  }
+
+  try {
+    const updates: { [key: string]: any } = {};
+    updates[`/trips/${tripId}/name`] = newTripName;
+
+    // Update the name in each member's copy of the trip info under /users/{uid}/trips/{tripId}
+    if (memberUids) {
+      for (const uid of memberUids) {
+        updates[`/users/${uid}/trips/${tripId}/name`] = newTripName;
+      }
+    }
+
+    await update(ref(database), updates);
+    console.log(`[tripService] updateTripNameInDb: Successfully updated trip ${tripId} name to "${newTripName}" in main trip object and for all members' lists.`);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] updateTripNameInDb: Error updating trip name for ${tripId}:`, error.message, "(Code:", error.code || 'N/A', ")");
+    if (error.code === 'PERMISSION_DENIED') {
+        console.error("[tripService] updateTripNameInDb: PERMISSION DENIED. Check Firebase Realtime Database rules for writing to '/trips' and '/users'.");
+    }
+    return false;
   }
 }

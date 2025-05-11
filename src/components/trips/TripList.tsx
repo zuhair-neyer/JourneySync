@@ -1,13 +1,22 @@
 
 "use client";
 
-import React, { useEffect } from 'react'; // Added useEffect
+import React, { useEffect, useState } from 'react'; 
 import { useTripContext } from '@/contexts/TripContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { TripCard } from './TripCard';
+import { EditTripNameDialog } from './EditTripNameDialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import Image from 'next/image';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Edit } from 'lucide-react';
+
+interface EditingTripDetails {
+  id: string;
+  name: string;
+  memberUids: string[];
+}
 
 export function TripList() {
   const { 
@@ -16,29 +25,20 @@ export function TripList() {
     selectedTrip, 
     isLoadingSelectedTrip, 
     selectedTripId, 
-    setSelectedTripId, // To refresh selected trip if needed
+    setSelectedTripId, 
     errorUserTrips,
     errorSelectedTrip 
   } = useTripContext();
+  const { currentUser } = useAuth();
 
-  // Effect to re-fetch selected trip details if the selectedTripId is already set
-  // and userTrips (which might trigger this component to update) changes.
-  // This helps if a trip name was updated by another action.
+  const [isEditTripNameDialogOpen, setIsEditTripNameDialogOpen] = useState(false);
+  const [editingTripDetails, setEditingTripDetails] = useState<EditingTripDetails | null>(null);
+
+
   useEffect(() => {
     if (selectedTripId && !isLoadingUserTrips) {
-      // Trigger a re-fetch of the selected trip to get latest details
-      // This is a bit of a trick: setting it to null then back to the ID
-      // can trigger the fetch logic in TripContext if dependencies are set up correctly.
-      // A more direct refreshSelectedTrip() function in context would be cleaner.
-      // For now, let's rely on TripContext's useEffect for selectedTripId.
-      // If the name changed in the list, the TripCard itself will show the new name.
-      // This is more about the detailed "Selected Trip" view.
-      // A simple way to force re-fetch of selected trip details:
-      // setSelectedTripId(null); // This will clear it
-      // setTimeout(() => setSelectedTripId(selectedTripId), 0); // Then set it back
-      // However, a direct refresh function in context is better.
-      // For now, if a displayName update happened, AuthContext update should trigger TripContext,
-      // which should refetch selectedTrip.
+      // The TripContext's useEffect for selectedTripId changing or displayName changing
+      // should handle refreshing the selected trip details.
     }
   }, [userTrips, selectedTripId, isLoadingUserTrips, setSelectedTripId]);
 
@@ -105,6 +105,17 @@ export function TripList() {
     );
   }
 
+  const handleOpenEditDialog = () => {
+    if (selectedTrip) {
+      setEditingTripDetails({
+        id: selectedTrip.id,
+        name: selectedTrip.name,
+        memberUids: Object.keys(selectedTrip.members || {}),
+      });
+      setIsEditTripNameDialogOpen(true);
+    }
+  };
+
   return (
     <div className="space-y-8 mt-6">
       <div>
@@ -143,16 +154,13 @@ export function TripList() {
                     {Object.values(selectedTrip.members).map(member => {
                       console.log("[TripList] Displaying member:", JSON.stringify(member));
                       return (
-                        <li key={member.uid}>{member.name || member.email || `User ${member.uid.substring(0,5)}...`}</li>
+                        <li key={member.uid}>{member.name || `User ${member.uid.substring(0,5)}...`}</li>
                       );
                     })}
                   </ul>
                 ) : (
                   <p className="text-sm text-muted-foreground">No members listed for this trip yet.</p>
                 )}
-                <p className="mt-4 text-xs text-muted-foreground">
-                  Created by: {selectedTrip.members[selectedTrip.createdBy]?.name || selectedTrip.createdBy} on {new Date(selectedTrip.createdAt).toLocaleDateString()}
-                </p>
                  <p className="mt-4 text-xs text-muted-foreground">
                     Further trip details (itinerary, expenses, etc.) would be shown here or on a dedicated trip dashboard page.
                 </p>
@@ -161,7 +169,32 @@ export function TripList() {
               <p className="text-muted-foreground">Trip details not found for ID: {selectedTripId}. It might have been deleted or the ID is incorrect.</p>
             )}
           </CardContent>
+          {selectedTrip && !isLoadingSelectedTrip && !errorSelectedTrip && (
+            <CardFooter className="flex justify-between items-center pt-4 border-t">
+              <p className="text-xs text-muted-foreground">
+                  Created by: {selectedTrip.members[selectedTrip.createdBy]?.name || `User ${selectedTrip.createdBy.substring(0,5)}...`} on {new Date(selectedTrip.createdAt).toLocaleDateString()}
+              </p>
+              {currentUser?.uid === selectedTrip.createdBy && (
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleOpenEditDialog}
+                  >
+                      <Edit className="mr-2 h-4 w-4" /> Edit Name
+                  </Button>
+              )}
+            </CardFooter>
+          )}
         </Card>
+      )}
+      {editingTripDetails && (
+        <EditTripNameDialog
+          tripId={editingTripDetails.id}
+          currentTripName={editingTripDetails.name}
+          memberUids={editingTripDetails.memberUids}
+          isOpen={isEditTripNameDialogOpen}
+          onOpenChange={setIsEditTripNameDialogOpen}
+        />
       )}
     </div>
   );
