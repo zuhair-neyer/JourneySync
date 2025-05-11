@@ -18,6 +18,8 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import type { Expense } from '@/types'; // Import updated Expense type
+import { Separator } from '@/components/ui/separator';
+
 
 interface User {
   id: string;
@@ -365,15 +367,15 @@ export default function ExpensesPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">Description</Label>
+              <Label htmlFor="description" className="text-right">Description <span className="text-destructive">*</span></Label>
               <Input id="description" name="description" value={currentExpense.description || ''} onChange={handleInputChange} className="col-span-3 bg-background" placeholder="e.g., Lunch with team" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">Amount</Label>
+              <Label htmlFor="amount" className="text-right">Amount <span className="text-destructive">*</span></Label>
               <Input id="amount" name="amount" type="number" value={currentExpense.amount || ''} onChange={handleInputChange} className="col-span-3 bg-background" placeholder="e.g., 50.00" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="currency" className="text-right">Currency</Label>
+              <Label htmlFor="currency" className="text-right">Currency <span className="text-destructive">*</span></Label>
               <Select name="currency" value={currentExpense.currency} onValueChange={handleSelectChange('currency')}>
                 <SelectTrigger className="col-span-3 bg-background"><SelectValue placeholder="Select currency" /></SelectTrigger>
                 <SelectContent>
@@ -382,7 +384,7 @@ export default function ExpensesPage() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="category" className="text-right">Category</Label>
+              <Label htmlFor="category" className="text-right">Category <span className="text-destructive">*</span></Label>
               <Select name="category" value={currentExpense.category} onValueChange={handleSelectChange('category')}>
                 <SelectTrigger className="col-span-3 bg-background"><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
@@ -391,7 +393,7 @@ export default function ExpensesPage() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="paidByUserId" className="text-right">Paid By</Label>
+              <Label htmlFor="paidByUserId" className="text-right">Paid By <span className="text-destructive">*</span></Label>
               <Select name="paidByUserId" value={currentExpense.paidByUserId} onValueChange={handleSelectChange('paidByUserId')}>
                 <SelectTrigger className="col-span-3 bg-background"><SelectValue placeholder="Select who paid" /></SelectTrigger>
                 <SelectContent>
@@ -400,11 +402,14 @@ export default function ExpensesPage() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="date" className="text-right">Date</Label>
+              <Label htmlFor="date" className="text-right">Date <span className="text-destructive">*</span></Label>
               <Input id="date" name="date" type="date" value={currentExpense.date || ''} onChange={handleInputChange} className="col-span-3 bg-background"/>
             </div>
+            
+            <Separator className="col-span-4 my-2" />
+
             <div className="grid grid-cols-4 items-start gap-4">
-              <Label className="text-right pt-2">Participants</Label>
+              <Label className="text-right pt-2">Participants <span className="text-destructive">*</span></Label>
               <div className="col-span-3 space-y-2">
                 {usersInCurrentTrip.map(user => (
                   <div key={user.id} className="flex items-center space-x-2">
@@ -416,8 +421,10 @@ export default function ExpensesPage() {
                     <Label htmlFor={`participant-${user.id}`}>{user.name}</Label>
                   </div>
                 ))}
-                 <Button variant="outline" size="sm" onClick={() => setCurrentExpense(prev => ({...prev, participantIds: usersInCurrentTrip.map(u => u.id)}))}>Select All</Button>
-                 <Button variant="outline" size="sm" onClick={() => setCurrentExpense(prev => ({...prev, participantIds: []}))} className="ml-2">Deselect All</Button>
+                 <div className="flex gap-2 mt-2">
+                    <Button variant="outline" size="sm" onClick={() => setCurrentExpense(prev => ({...prev, participantIds: usersInCurrentTrip.map(u => u.id)}))}>Select All</Button>
+                    <Button variant="outline" size="sm" onClick={() => setCurrentExpense(prev => ({...prev, participantIds: []}))}>Deselect All</Button>
+                 </div>
               </div>
             </div>
             <Card className="mt-2 col-span-4">
