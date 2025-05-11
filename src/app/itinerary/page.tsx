@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Edit2, Trash2, Calendar, Clock, MapPin as LocationPin, Users, MessageSquare, Loader2, Info, Send } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, Calendar, Clock, MapPin as LocationPin, Users, MessageSquare, Loader2, Info, Send, ThumbsUp } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Image from 'next/image';
 import type { ItineraryItem, ItineraryComment } from '@/types';
@@ -193,6 +193,37 @@ export default function ItineraryPage() {
     }
   };
 
+  const handleVote = async (itemId: string) => {
+    if (!currentUser || !selectedTripId) {
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in to vote." });
+      return;
+    }
+
+    const itemToVoteOn = items.find(i => i.id === itemId);
+    if (!itemToVoteOn) {
+      toast({ variant: "destructive", title: "Error", description: "Item not found." });
+      return;
+    }
+
+    const newVoteCount = (itemToVoteOn.votes || 0) + 1;
+    
+    // Optimistic UI Update
+    setItems(prevItems => prevItems.map(i => i.id === itemId ? { ...i, votes: newVoteCount } : i));
+
+    const success = await updateItineraryItemInTripDb(selectedTripId, itemId, { votes: newVoteCount });
+
+    if (success) {
+      toast({ title: "Voted!", description: `Your vote for "${itemToVoteOn.title}" has been counted.` });
+      // Optionally, refetch to ensure consistency, though optimistic update should handle UI
+      // fetchTripItineraryItems(); 
+    } else {
+      toast({ variant: "destructive", title: "Vote Failed", description: "Could not save your vote. Please try again." });
+      // Revert optimistic update
+      setItems(prevItems => prevItems.map(i => i.id === itemId ? { ...i, votes: itemToVoteOn.votes || 0 } : i));
+    }
+  };
+
+
   return (
     <div className="container mx-auto p-4 md:p-8">
       <header className="mb-8 flex flex-col md:flex-row justify-between items-center">
@@ -376,7 +407,15 @@ export default function ItineraryPage() {
                       <span className="flex items-center"><Users className="mr-1 h-4 w-4" /> Votes: {item.votes || 0}</span>
                   </div>
                   <div className="mt-2 space-x-2">
-                      <Button variant="outline" size="sm" className="text-primary border-primary hover:bg-primary/10" onClick={() => toast({title: "Coming Soon", description: "Voting feature will be available soon."})}>Vote</Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-primary border-primary hover:bg-primary/10" 
+                        onClick={() => handleVote(item.id)}
+                        disabled={!currentUser}
+                      >
+                        <ThumbsUp className="mr-1.5 h-3.5 w-3.5" /> Vote
+                      </Button>
                   </div>
                 </div>
               </CardContent>
