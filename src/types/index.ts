@@ -22,6 +22,14 @@ export interface Poll {
   // userVote?: string; // This will be managed client-side in PollsPage for UI purposes
 }
 
+export interface ItineraryComment {
+  id: string; // Unique ID for the comment
+  userId: string;
+  userName: string; // Name of the user who commented
+  text: string;
+  createdAt: number; // Timestamp
+}
+
 export interface ItineraryItem {
   id: string;
   tripId: string; // ID of the trip this item belongs to
@@ -33,9 +41,8 @@ export interface ItineraryItem {
   notes?: string;
   createdBy: string; // UID of the user who created the item
   createdAt: number; // Timestamp of creation
-  // For collaborative features - can be expanded later
   votes?: number; 
-  comments?: string[];
+  comments: ItineraryComment[]; // Changed from string[] to ItineraryComment[] and made non-optional
 }
 
 export interface Trip {

@@ -1,7 +1,7 @@
 
 'use server';
 import { database } from '@/firebase/config';
-import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem } from '@/types';
+import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment } from '@/types';
 import { ref, push, set, get, child, update, serverTimestamp, remove } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
@@ -70,7 +70,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       },
       expenses: {},
       polls: {}, 
-      itinerary: {}, // Initialize itinerary
+      itinerary: {}, 
     };
     await set(newTripRef, newTripData);
 
@@ -507,7 +507,12 @@ export async function addItineraryItemToTripDb(tripId: string, itemData: Omit<It
       console.error("[tripService] addItineraryItemToTripDb: Failed to generate itinerary item ID.");
       return null;
     }
-    const itemToAdd: Omit<ItineraryItem, 'tripId'> = { ...itemData, id: itemId };
+    // Ensure comments array is initialized
+    const itemToAdd: Omit<ItineraryItem, 'tripId'> = { 
+        ...itemData, 
+        id: itemId,
+        comments: itemData.comments || [], // Ensure comments is an array
+    };
     await set(newItemRef, itemToAdd);
     return itemId;
   } catch (error: any) {
@@ -529,6 +534,7 @@ export async function getItineraryItemsForTripFromDb(tripId: string): Promise<It
         ...itemsData[itemId],
         id: itemId,
         tripId: tripId,
+        comments: itemsData[itemId].comments || [], // Ensure comments is an array
       }));
       return itemsArray;
     }
@@ -539,13 +545,12 @@ export async function getItineraryItemsForTripFromDb(tripId: string): Promise<It
   }
 }
 
-export async function updateItineraryItemInTripDb(tripId: string, itemId: string, itemData: Partial<Omit<ItineraryItem, 'id' | 'tripId'>>): Promise<boolean> {
+export async function updateItineraryItemInTripDb(tripId: string, itemId: string, itemData: Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'comments'>>): Promise<boolean> {
   if (!tripId || !itemId) {
     console.error("[tripService] updateItineraryItemInTripDb: Trip ID and Item ID are required.");
     return false;
   }
   try {
-    // Construct specific paths for updates to avoid overwriting entire object if only partial data is sent
     const updates: { [key: string]: any } = {};
     const basePath = `trips/${tripId}/itinerary/${itemId}`;
 
@@ -555,12 +560,12 @@ export async function updateItineraryItemInTripDb(tripId: string, itemId: string
     if (itemData.date !== undefined) updates[`${basePath}/date`] = itemData.date;
     if (itemData.time !== undefined) updates[`${basePath}/time`] = itemData.time;
     if (itemData.notes !== undefined) updates[`${basePath}/notes`] = itemData.notes;
-    // createdBy and createdAt should generally not be updated after creation
-    // votes and comments can be handled if they become part of Firebase structure
+    if (itemData.votes !== undefined) updates[`${basePath}/votes`] = itemData.votes;
+    // Comments are handled by addCommentToItineraryItemDb
 
     if (Object.keys(updates).length === 0) {
         console.warn("[tripService] updateItineraryItemInTripDb: No valid fields to update provided.");
-        return true; // No changes needed
+        return true; 
     }
     
     await update(ref(database), updates);
@@ -583,6 +588,37 @@ export async function deleteItineraryItemFromDb(tripId: string, itemId: string):
   } catch (error: any) {
     console.error(`[tripService] deleteItineraryItemFromDb: Error deleting item ${itemId} from trip ${tripId}:`, error.message);
     return false;
+  }
+}
+
+export async function addCommentToItineraryItemDb(tripId: string, itemId: string, commentData: ItineraryComment): Promise<string | null> {
+  if (!tripId || !itemId) {
+    console.error("[tripService] addCommentToItineraryItemDb: Trip ID and Item ID are required.");
+    return null;
+  }
+  if (!commentData || !commentData.id || !commentData.userId || !commentData.text) {
+    console.error("[tripService] addCommentToItineraryItemDb: Comment data is incomplete.");
+    return null;
+  }
+
+  try {
+    const itemRef = ref(database, `trips/${tripId}/itinerary/${itemId}`);
+    const itemSnapshot = await get(itemRef);
+
+    if (!itemSnapshot.exists()) {
+      console.error(`[tripService] addCommentToItineraryItemDb: Itinerary item ${itemId} not found in trip ${tripId}.`);
+      return null;
+    }
+
+    const item = itemSnapshot.val() as ItineraryItem;
+    const existingComments = item.comments || [];
+    const updatedComments = [...existingComments, commentData];
+
+    await update(itemRef, { comments: updatedComments });
+    return commentData.id; 
+  } catch (error: any) {
+    console.error(`[tripService] addCommentToItineraryItemDb: Error adding comment to item ${itemId} in trip ${tripId}:`, error.message);
+    return null;
   }
 }
 

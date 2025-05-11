@@ -6,15 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Edit2, Trash2, Calendar, Clock, MapPin as LocationPin, Users, MessageSquare, Loader2, Info } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, Calendar, Clock, MapPin as LocationPin, Users, MessageSquare, Loader2, Info, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Image from 'next/image';
-import type { ItineraryItem } from '@/types';
+import type { ItineraryItem, ItineraryComment } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTripContext } from '@/contexts/TripContext';
 import { useToast } from '@/hooks/use-toast';
-import { addItineraryItemToTripDb, getItineraryItemsForTripFromDb, updateItineraryItemInTripDb, deleteItineraryItemFromDb } from '@/firebase/tripService';
+import { addItineraryItemToTripDb, getItineraryItemsForTripFromDb, updateItineraryItemInTripDb, deleteItineraryItemFromDb, addCommentToItineraryItemDb } from '@/firebase/tripService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from '@/components/ui/separator';
 
 export default function ItineraryPage() {
   const { currentUser } = useAuth();
@@ -24,10 +26,11 @@ export default function ItineraryPage() {
   const [items, setItems] = useState<ItineraryItem[]>([]);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [currentItem, setCurrentItem] = useState<Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'createdBy' | 'createdAt'>>>({
+  const [currentItem, setCurrentItem] = useState<Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'comments'>>>({
     title: '', description: '', location: '', date: '', time: '', notes: ''
   });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [newCommentTexts, setNewCommentTexts] = useState<Record<string, string>>({}); // { itemId: commentText }
   
   const fetchTripItineraryItems = useCallback(async () => {
     if (!selectedTripId) {
@@ -37,7 +40,7 @@ export default function ItineraryPage() {
     setIsLoadingItems(true);
     try {
       const fetchedItems = await getItineraryItemsForTripFromDb(selectedTripId);
-      setItems(fetchedItems);
+      setItems(fetchedItems.map(item => ({ ...item, comments: item.comments || [] })));
     } catch (error) {
       console.error("Failed to fetch itinerary items:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load itinerary for this trip." });
@@ -75,20 +78,20 @@ export default function ItineraryPage() {
       notes: currentItem.notes || '',
       createdBy: currentUser.uid,
       createdAt: Date.now(),
-      votes: 0, // Default votes
-      comments: [], // Default comments
+      votes: 0,
+      comments: [], // Initialize with empty comments array
     };
     
     let success = false;
     if (editingId) {
-      // For editing, we only update fields that are part of currentItem. createdBy and createdAt are not updated.
-      const updateData: Partial<Omit<ItineraryItem, 'id'|'tripId'|'createdBy'|'createdAt'>> = {
+      const updateData: Partial<Omit<ItineraryItem, 'id'|'tripId'|'createdBy'|'createdAt'|'comments'>> = {
         title: currentItem.title,
         description: currentItem.description,
         location: currentItem.location,
         date: currentItem.date,
         time: currentItem.time,
         notes: currentItem.notes,
+        votes: items.find(i => i.id === editingId)?.votes || 0, // Preserve existing votes
       };
       success = await updateItineraryItemInTripDb(selectedTripId, editingId, updateData);
       if (success) toast({ title: "Success", description: "Itinerary item updated." });
@@ -149,6 +152,45 @@ export default function ItineraryPage() {
     setCurrentItem({ title: '', description: '', location: '', date: new Date().toISOString().split('T')[0], time: '12:00', notes: ''});
     setEditingId(null);
     setIsDialogOpen(true);
+  };
+
+  const handleCommentTextChange = (itemId: string, text: string) => {
+    setNewCommentTexts(prev => ({ ...prev, [itemId]: text }));
+  };
+
+  const handleAddComment = async (itemId: string) => {
+    if (!currentUser || !selectedTripId) {
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in to comment." });
+      return;
+    }
+    const commentText = newCommentTexts[itemId]?.trim();
+    if (!commentText) {
+      toast({ variant: "destructive", title: "Error", description: "Comment cannot be empty." });
+      return;
+    }
+
+    const newComment: Omit<ItineraryComment, 'id'> = {
+      userId: currentUser.uid,
+      userName: currentUser.displayName || currentUser.email || `User...${currentUser.uid.slice(-4)}`,
+      text: commentText,
+      createdAt: Date.now(),
+    };
+    
+    // Generate a unique ID for the comment (client-side for array storage)
+    const commentWithId: ItineraryComment = {
+        ...newComment,
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }
+
+    const success = await addCommentToItineraryItemDb(selectedTripId, itemId, commentWithId);
+
+    if (success) {
+      toast({ title: "Success", description: "Comment added." });
+      setNewCommentTexts(prev => ({ ...prev, [itemId]: '' })); // Clear input
+      fetchTripItineraryItems(); // Refetch to show new comment
+    } else {
+      toast({ variant: "destructive", title: "Error", description: "Failed to add comment." });
+    }
   };
 
   return (
@@ -271,7 +313,6 @@ export default function ItineraryPage() {
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-xl text-primary">{item.title}</CardTitle>
-                  {/* Image removed as per user request */}
                 </div>
                 <CardDescription>{item.description}</CardDescription>
                  <p className="text-xs text-muted-foreground">
@@ -285,15 +326,57 @@ export default function ItineraryPage() {
                   <p className="flex items-center"><Clock className="mr-2 h-4 w-4 text-accent" /> {item.time}</p>
                   {item.notes && <p className="italic">Notes: {item.notes}</p>}
                 </div>
-                {/* Placeholder for votes and comments - keep if needed, or remove if not part of Firebase integration yet */}
+                
+                <Separator className="my-4" />
+
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center">
+                    <MessageSquare className="mr-2 h-4 w-4 text-accent" /> Comments ({item.comments.length})
+                  </h4>
+                  <div className="space-y-3 max-h-40 overflow-y-auto pr-1">
+                    {item.comments.length > 0 ? item.comments.map(comment => (
+                      <div key={comment.id} className="text-xs p-2 rounded-md bg-secondary/50">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={`https://picsum.photos/seed/${comment.userId}/32/32`} alt={comment.userName} data-ai-hint="person avatar" />
+                            <AvatarFallback>{comment.userName.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <span className="font-semibold text-foreground">{comment.userName}</span>
+                          <span className="text-muted-foreground text-xs">· {new Date(comment.createdAt).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>
+                        </div>
+                        <p className="text-muted-foreground pl-1">{comment.text}</p>
+                      </div>
+                    )) : (
+                      <p className="text-xs text-muted-foreground italic">No comments yet.</p>
+                    )}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Textarea
+                      placeholder="Add a comment..."
+                      value={newCommentTexts[item.id] || ''}
+                      onChange={(e) => handleCommentTextChange(item.id, e.target.value)}
+                      className="text-xs h-12 bg-background flex-grow"
+                      rows={1}
+                    />
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      onClick={() => handleAddComment(item.id)} 
+                      className="text-primary hover:text-primary/80 h-12 w-12"
+                      disabled={!currentUser || !newCommentTexts[item.id]?.trim()}
+                      aria-label="Add comment"
+                    >
+                      <Send className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="mt-4 pt-4 border-t border-border">
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <span className="flex items-center"><Users className="mr-1 h-4 w-4" /> Votes: {item.votes || 0}</span>
-                      <span className="flex items-center"><MessageSquare className="mr-1 h-4 w-4" /> Comments: {item.comments?.length || 0}</span>
                   </div>
                   <div className="mt-2 space-x-2">
                       <Button variant="outline" size="sm" className="text-primary border-primary hover:bg-primary/10" onClick={() => toast({title: "Coming Soon", description: "Voting feature will be available soon."})}>Vote</Button>
-                      <Button variant="outline" size="sm" onClick={() => toast({title: "Coming Soon", description: "Commenting feature will be available soon."})}>Comment</Button>
                   </div>
                 </div>
               </CardContent>
