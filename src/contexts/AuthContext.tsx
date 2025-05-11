@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { ReactNode, Dispatch, SetStateAction } from 'react';
@@ -71,12 +70,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await updateProfile(userCredential.user, {
           displayName: name,
         });
-        setCurrentUser({ ...userCredential.user, displayName: name, photoURL: userCredential.user.photoURL, email: userCredential.user.email, emailVerified: userCredential.user.emailVerified, uid: userCredential.user.uid } as FirebaseUser); 
+        // Fetch the latest user object which should include the updated profile
+        // This ensures that the local currentUser state is definitively updated with the new displayName.
+        const updatedUser = auth.currentUser; 
+        setCurrentUser(updatedUser);
       }
       
       toast({ title: "Success", description: "Account created successfully!" });
       router.push('/'); 
-      return userCredential.user;
+      return auth.currentUser; // Return the potentially updated currentUser
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
@@ -135,8 +137,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setError(null);
     try {
       await updateProfile(auth.currentUser, { displayName: name });
-      // Update local currentUser state
-      setCurrentUser(prevUser => prevUser ? ({ ...prevUser, displayName: name } as FirebaseUser) : null);
+      // Update local currentUser state by re-fetching from auth.currentUser
+      setCurrentUser(auth.currentUser ? { ...auth.currentUser } as FirebaseUser : null);
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
       const authError = e as AuthError;
@@ -158,8 +160,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       await firebaseUpdatePassword(auth.currentUser, newPassword);
       toast({ title: "Success", description: "Password updated successfully! Please log in again if prompted." });
-      // Firebase might require re-authentication for password changes, which it handles.
-      // For an enhanced UX, you might redirect to login or prompt for current password first.
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
