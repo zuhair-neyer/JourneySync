@@ -9,8 +9,9 @@ import { EditTripNameDialog } from './EditTripNameDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link'; // Import Link
 import Image from 'next/image';
-import { AlertTriangle, Edit } from 'lucide-react';
+import { AlertTriangle, Edit, LayoutDashboard } from 'lucide-react'; // Added LayoutDashboard
 
 interface EditingTripDetails {
   id: string;
@@ -154,7 +155,7 @@ export function TripList() {
                     {Object.values(selectedTrip.members).map(member => {
                       console.log("[TripList] Displaying member:", JSON.stringify(member));
                       return (
-                        <li key={member.uid}>{member.name || `User ${member.uid.substring(0,5)}...`}</li>
+                        <li key={member.uid}>{member.name || `User...${member.uid.substring(member.uid.length - 4)}`}</li>
                       );
                     })}
                   </ul>
@@ -162,23 +163,33 @@ export function TripList() {
                   <p className="text-sm text-muted-foreground">No members listed for this trip yet.</p>
                 )}
                  <p className="mt-4 text-xs text-muted-foreground">
-                    Further trip details (itinerary, expenses, etc.) would be shown here or on a dedicated trip dashboard page.
+                    Further trip details (itinerary, expenses, etc.) are available on the Trip Dashboard.
                 </p>
               </>
             ) : (
-              <p className="text-muted-foreground">Trip details not found for ID: {selectedTripId}. It might have been deleted or the ID is incorrect.</p>
+              <p className="text-muted-foreground">
+                Trip details not found for ID: {selectedTripId}. It might have been deleted or the ID is incorrect.
+              </p>
             )}
           </CardContent>
           {selectedTrip && !isLoadingSelectedTrip && !errorSelectedTrip && (
-            <CardFooter className="flex justify-between items-center pt-4 border-t">
-              <p className="text-xs text-muted-foreground">
-                  Created by: {selectedTrip.members[selectedTrip.createdBy]?.name || `User ${selectedTrip.createdBy.substring(0,5)}...`} on {new Date(selectedTrip.createdAt).toLocaleDateString()}
-              </p>
+            <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 border-t gap-2">
+              <div>
+                <p className="text-xs text-muted-foreground">
+                    Created by: {selectedTrip.members[selectedTrip.createdBy]?.name || `User...${selectedTrip.createdBy.substring(selectedTrip.createdBy.length-4)}`} on {new Date(selectedTrip.createdAt).toLocaleDateString()}
+                </p>
+                 <Link href="/trip-dashboard" passHref>
+                    <Button variant="link" size="sm" className="p-0 h-auto mt-1 text-primary hover:text-primary/80">
+                        <LayoutDashboard className="mr-1 h-3 w-3" /> View Full Dashboard
+                    </Button>
+                </Link>
+              </div>
               {currentUser?.uid === selectedTrip.createdBy && (
                   <Button
                       variant="outline"
                       size="sm"
                       onClick={handleOpenEditDialog}
+                      className="mt-2 sm:mt-0"
                   >
                       <Edit className="mr-2 h-4 w-4" /> Edit Name
                   </Button>
