@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect } from 'react'; // Added useEffect
@@ -150,7 +151,7 @@ export function TripList() {
                   <p className="text-sm text-muted-foreground">No members listed for this trip yet.</p>
                 )}
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Created by: {selectedTrip.createdBy} on {new Date(selectedTrip.createdAt).toLocaleDateString()}
+                  Created by: {selectedTrip.members[selectedTrip.createdBy]?.name || selectedTrip.createdBy} on {new Date(selectedTrip.createdAt).toLocaleDateString()}
                 </p>
                  <p className="mt-4 text-xs text-muted-foreground">
                     Further trip details (itinerary, expenses, etc.) would be shown here or on a dedicated trip dashboard page.
@@ -165,3 +166,4 @@ export function TripList() {
     </div>
   );
 }
+
