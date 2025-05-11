@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, Download, Bell, CreditCard, CheckCircle, Send, Target, PieChart as LucidePieChartIcon, Filter, Loader2 } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, Bell, CreditCard, CheckCircle, Send, Target, PieChart as LucidePieChartIcon, Filter, Loader2, Settings } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import { useTripContext } from '@/contexts/TripContext';
 import Image from 'next/image';
@@ -38,7 +38,45 @@ interface Balance {
 }
 
 const expenseCategories = ["Food", "Transport", "Accommodation", "Activities", "Shopping", "Miscellaneous"];
-const currencies = ["USD", "EUR", "GBP", "JPY", "CAD"];
+const currencies = ["USD", "EUR", "GBP", "JPY", "CAD", "INR"];
+const BASE_APP_CURRENCY = 'USD';
+
+const MOCK_RATES: Record<string, number> = {
+  'EUR_USD': 1.08, 'GBP_USD': 1.27, 'JPY_USD': 0.0064, 'CAD_USD': 0.73, 'INR_USD': 0.012,
+  'USD_EUR': 0.92, 'USD_GBP': 0.79, 'USD_JPY': 157.0, 'USD_CAD': 1.37, 'USD_INR': 83.0,
+};
+
+const convertCurrency = (amount: number, fromCurrency: string, toCurrency: string): number => {
+  if (fromCurrency === toCurrency) return amount;
+
+  let amountInBase = amount;
+  // Step 1: Convert 'fromCurrency' to BASE_APP_CURRENCY
+  if (fromCurrency !== BASE_APP_CURRENCY) {
+    const rateKey = `${fromCurrency}_${BASE_APP_CURRENCY}`;
+    const rate = MOCK_RATES[rateKey];
+    if (rate !== undefined) {
+      amountInBase = amount * rate;
+    } else {
+      console.warn(`Rate from ${fromCurrency} to ${BASE_APP_CURRENCY} not found. Cannot convert.`);
+      return amount; 
+    }
+  }
+
+  // Step 2: Convert amount from BASE_APP_CURRENCY to 'toCurrency'
+  if (toCurrency === BASE_APP_CURRENCY) {
+    return amountInBase;
+  }
+
+  const rateKeyToTarget = `${BASE_APP_CURRENCY}_${toCurrency}`;
+  const rateTo = MOCK_RATES[rateKeyToTarget];
+  if (rateTo !== undefined) {
+    return amountInBase * rateTo;
+  } else {
+    console.warn(`Rate from ${BASE_APP_CURRENCY} to ${toCurrency} not found. Returning amount in base currency.`);
+    return amountInBase; 
+  }
+};
+
 
 const categoryIcons: { [key: string]: React.ElementType } = {
   Food: Utensils,
@@ -69,15 +107,18 @@ export default function ExpensesPage() {
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
   
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
-  const [currentExpense, setCurrentExpense] = useState<Partial<Expense>>({ currency: 'USD', category: expenseCategories[0] });
+  const [currentExpense, setCurrentExpense] = useState<Partial<Expense>>({ currency: currencies[0], category: expenseCategories[0] });
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [balances, setBalances] = useState<Balance[]>([]);
-  const [totalGroupExpense, setTotalGroupExpense] = useState(0);
+  const [totalGroupExpense, setTotalGroupExpense] = useState(0); // This will be in BASE_APP_CURRENCY
   const [settledStatus, setSettledStatus] = useState<Record<string, boolean>>({});
 
-  const [tripBudget, setTripBudget] = useState<number | null>(null);
+  const [tripBudget, setTripBudget] = useState<number | null>(null); // Stored in BASE_APP_CURRENCY
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
   const [budgetInput, setBudgetInput] = useState<string>("");
+
+  const [displayCurrency, setDisplayCurrency] = useState<string>(currencies[0]);
+
 
   useEffect(() => {
     const mockUsers: User[] = [
@@ -133,33 +174,35 @@ export default function ExpensesPage() {
     const activeUsers = usersInCurrentTrip;
     const currentExpenses = expensesForSelectedTrip;
 
-    if (!selectedTripId || activeUsers.length === 0 || currentExpenses.length === 0) {
+    if (!selectedTripId || activeUsers.length === 0) {
       setBalances([]);
       setTotalGroupExpense(0);
       return;
     }
 
-    let newTotalGroupExpense = 0;
-    const userExpensesSummary: { [userId: string]: { paid: number; share: number } } = {};
+    let newTotalGroupExpenseInBase = 0;
+    const userExpensesSummary: { [userId: string]: { paid: number; share: number } } = {}; // All values in BASE_APP_CURRENCY
 
     activeUsers.forEach(user => {
       userExpensesSummary[user.id] = { paid: 0, share: 0 };
     });
 
     currentExpenses.forEach(expense => {
-      newTotalGroupExpense += expense.amount;
+      const amountInBaseCurrency = convertCurrency(expense.amount, expense.currency, BASE_APP_CURRENCY);
+      newTotalGroupExpenseInBase += amountInBaseCurrency;
+
       if (userExpensesSummary[expense.paidByUserId] && activeUsers.some(u => u.id === expense.paidByUserId)) {
-        userExpensesSummary[expense.paidByUserId].paid += expense.amount;
+        userExpensesSummary[expense.paidByUserId].paid += amountInBaseCurrency;
       }
 
       const participantsInExpenseForThisTrip = expense.participantIds.filter(pid => activeUsers.some(u => u.id === pid));
       const numParticipants = participantsInExpenseForThisTrip.length;
 
       if (numParticipants > 0) {
-        const sharePerParticipant = expense.amount / numParticipants;
+        const sharePerParticipantInBase = amountInBaseCurrency / numParticipants;
         participantsInExpenseForThisTrip.forEach(pid => {
           if (userExpensesSummary[pid]) { 
-            userExpensesSummary[pid].share += sharePerParticipant;
+            userExpensesSummary[pid].share += sharePerParticipantInBase;
           }
         });
       }
@@ -168,14 +211,14 @@ export default function ExpensesPage() {
     const newBalances: Balance[] = activeUsers.map(user => ({
       userId: user.id,
       userName: user.name,
-      totalPaid: userExpensesSummary[user.id]?.paid || 0,
-      totalShare: userExpensesSummary[user.id]?.share || 0,
-      netBalance: (userExpensesSummary[user.id]?.paid || 0) - (userExpensesSummary[user.id]?.share || 0),
+      totalPaid: userExpensesSummary[user.id]?.paid || 0, // in BASE_APP_CURRENCY
+      totalShare: userExpensesSummary[user.id]?.share || 0, // in BASE_APP_CURRENCY
+      netBalance: (userExpensesSummary[user.id]?.paid || 0) - (userExpensesSummary[user.id]?.share || 0), // in BASE_APP_CURRENCY
       isSettled: settledStatus[user.id] || false,
     }));
 
     setBalances(newBalances);
-    setTotalGroupExpense(newTotalGroupExpense);
+    setTotalGroupExpense(newTotalGroupExpenseInBase); // Stored in BASE_APP_CURRENCY
   }, [expensesForSelectedTrip, usersInCurrentTrip, settledStatus, selectedTripId]);
 
   useEffect(() => {
@@ -183,14 +226,16 @@ export default function ExpensesPage() {
   }, [calculateBalancesAndTotal]); 
 
   useEffect(() => {
-    if (tripBudget !== null && totalGroupExpense > tripBudget && selectedTripId) {
+    if (tripBudget !== null && totalGroupExpense > tripBudget && selectedTripId) { // Both are in BASE_APP_CURRENCY
+      const totalExpenseForDisplay = convertCurrency(totalGroupExpense, BASE_APP_CURRENCY, displayCurrency);
+      const budgetForDisplay = convertCurrency(tripBudget, BASE_APP_CURRENCY, displayCurrency);
       toast({
         variant: "destructive",
         title: "Budget Exceeded",
-        description: `The group has spent ${totalGroupExpense.toFixed(2)} for trip "${selectedTrip?.name}", exceeding the budget of ${tripBudget.toFixed(2)}.`,
+        description: `The group has spent ${totalExpenseForDisplay.toFixed(2)} ${displayCurrency} for trip "${selectedTrip?.name}", exceeding the budget of ${budgetForDisplay.toFixed(2)} ${displayCurrency}.`,
       });
     }
-  }, [totalGroupExpense, tripBudget, toast, selectedTripId, selectedTrip?.name]);
+  }, [totalGroupExpense, tripBudget, toast, selectedTripId, selectedTrip?.name, displayCurrency]);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -246,9 +291,9 @@ export default function ExpensesPage() {
     }
 
     if (success) {
-      fetchTripExpenses(); // Refetch expenses for the current trip
+      fetchTripExpenses(); 
       setIsExpenseDialogOpen(false);
-      setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: usersInCurrentTrip.map(u => u.id) }); 
+      setCurrentExpense({ currency: currencies[0], category: expenseCategories[0], participantIds: usersInCurrentTrip.map(u => u.id) }); 
       setEditingExpenseId(null);
     } else {
       toast({ variant: "destructive", title: "Error", description: `Failed to ${editingExpenseId ? 'update' : 'add'} expense.` });
@@ -266,7 +311,7 @@ export default function ExpensesPage() {
     const success = await deleteExpenseFromDb(selectedTripId, id);
     if (success) {
       toast({ title: "Success", description: "Expense deleted." });
-      fetchTripExpenses(); // Refetch expenses
+      fetchTripExpenses(); 
     } else {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete expense." });
     }
@@ -277,7 +322,7 @@ export default function ExpensesPage() {
       toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip first to add an expense to it." });
       return;
     }
-    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: usersInCurrentTrip.map(u => u.id), date: new Date().toISOString().split('T')[0], tripId: selectedTripId });
+    setCurrentExpense({ currency: currencies[0], category: expenseCategories[0], participantIds: usersInCurrentTrip.map(u => u.id), date: new Date().toISOString().split('T')[0], tripId: selectedTripId });
     setEditingExpenseId(null);
     setIsExpenseDialogOpen(true);
   };
@@ -293,37 +338,33 @@ export default function ExpensesPage() {
       toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip to set its budget." });
       return;
     }
-    setBudgetInput(tripBudget?.toString() || "");
+    // If tripBudget (in BASE_APP_CURRENCY) exists, convert it to string for input. Otherwise, empty.
+    setBudgetInput(tripBudget !== null ? tripBudget.toString() : "");
     setIsBudgetDialogOpen(true);
   };
 
   const handleSaveBudget = () => {
-    const newBudget = parseFloat(budgetInput);
-    if (isNaN(newBudget) || newBudget < 0) {
+    const newBudgetInBase = parseFloat(budgetInput); // Input is taken as BASE_APP_CURRENCY
+    if (isNaN(newBudgetInBase) || newBudgetInBase < 0) {
       toast({ variant: "destructive", title: "Invalid Budget", description: "Please enter a valid positive number for the budget." });
       return;
     }
-    setTripBudget(newBudget); 
-    toast({ title: "Success", description: `Budget for trip "${selectedTrip?.name}" set to ${newBudget.toFixed(2)}.` });
+    setTripBudget(newBudgetInBase); 
+    const budgetForDisplay = convertCurrency(newBudgetInBase, BASE_APP_CURRENCY, displayCurrency);
+    toast({ title: "Success", description: `Budget for trip "${selectedTrip?.name}" set to ${budgetForDisplay.toFixed(2)} ${displayCurrency}.` });
     setIsBudgetDialogOpen(false);
   };
 
-  const handleDownloadReport = () => {
-    if (!selectedTripId) {
-      toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip to download its report." });
-      return;
-    }
-    toast({ title: "Feature Coming Soon", description: `A downloadable expense report for trip "${selectedTrip?.name}" will be available in a future update.` });
-  };
-
-
-  const expenseDataForChart = expenseCategories.map(category => ({
-    name: category,
-    total: expensesForSelectedTrip 
+  const expenseDataForChart = expenseCategories.map(category => {
+    const totalForCategoryInBase = expensesForSelectedTrip
       .filter(exp => exp.category === category)
-      .reduce((sum, exp) => sum + exp.amount, 0),
-    fill: categoryColors[category] || 'hsl(var(--muted))',
-  })).filter(item => item.total > 0);
+      .reduce((sum, exp) => sum + convertCurrency(exp.amount, exp.currency, BASE_APP_CURRENCY), 0);
+    return {
+      name: category,
+      total: totalForCategoryInBase, // This total is in BASE_APP_CURRENCY
+      fill: categoryColors[category] || 'hsl(var(--muted))',
+    };
+  }).filter(item => item.total > 0);
   
   const chartConfig: ChartConfig = expenseCategories.reduce((config, category) => {
     const IconComponent = categoryIcons[category];
@@ -335,8 +376,10 @@ export default function ExpensesPage() {
     return config;
   }, {} as ChartConfig);
 
-  const budgetProgress = tripBudget && tripBudget > 0 ? (totalGroupExpense / tripBudget) * 100 : 0;
+  const budgetProgress = tripBudget && tripBudget > 0 ? (totalGroupExpense / tripBudget) * 100 : 0; // Both in BASE_APP_CURRENCY
 
+  const totalGroupExpenseForDisplay = convertCurrency(totalGroupExpense, BASE_APP_CURRENCY, displayCurrency);
+  const tripBudgetForDisplay = tripBudget !== null ? convertCurrency(tripBudget, BASE_APP_CURRENCY, displayCurrency) : null;
 
   return (
     <div className="container mx-auto p-4 md:p-8">
@@ -463,17 +506,17 @@ export default function ExpensesPage() {
             <DialogHeader>
                 <DialogTitle className="text-primary">Set Budget for {selectedTrip?.name || "Trip"}</DialogTitle>
                 <DialogDescription>
-                    Enter the total budget for this trip. You'll be alerted if spending exceeds this amount.
+                    Enter the total budget for this trip in {BASE_APP_CURRENCY}. You'll be alerted if spending exceeds this amount.
                 </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-                <Label htmlFor="budgetAmount">Budget Amount ({expensesForSelectedTrip.length > 0 ? expensesForSelectedTrip[0].currency : 'USD'})</Label>
+                <Label htmlFor="budgetAmount">Budget Amount ({BASE_APP_CURRENCY})</Label>
                 <Input 
                     id="budgetAmount" 
                     type="number" 
                     value={budgetInput} 
                     onChange={(e) => setBudgetInput(e.target.value)} 
-                    placeholder="e.g., 1000" 
+                    placeholder={`e.g., 1000 ${BASE_APP_CURRENCY}`}
                     className="bg-background"
                 />
             </div>
@@ -483,6 +526,24 @@ export default function ExpensesPage() {
             </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <Card className="mb-8 shadow-md bg-card">
+        <CardHeader>
+          <CardTitle className="text-lg text-primary flex items-center"><Settings className="mr-2 h-5 w-5" /> Display Options</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Label htmlFor="displayCurrencySelect">View financial summaries in:</Label>
+          <Select value={displayCurrency} onValueChange={setDisplayCurrency}>
+            <SelectTrigger id="displayCurrencySelect" className="w-full md:w-[200px] bg-background mt-1">
+              <SelectValue placeholder="Select display currency" />
+            </SelectTrigger>
+            <SelectContent>
+              {currencies.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
 
       {selectedTripId ? (
         <>
@@ -492,8 +553,8 @@ export default function ExpensesPage() {
                 <CardTitle className="text-lg text-primary">Total Expenses for {selectedTrip?.name}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{totalGroupExpense.toFixed(2)} <span className="text-sm text-muted-foreground">{expensesForSelectedTrip.length > 0 ? expensesForSelectedTrip[0].currency : 'USD'}</span></p>
-                <p className="text-xs text-muted-foreground"> (Assumes all expenses are in the first expense's currency or manually converted by user)</p>
+                <p className="text-3xl font-bold">{totalGroupExpenseForDisplay.toFixed(2)} <span className="text-sm text-muted-foreground">{displayCurrency}</span></p>
+                <p className="text-xs text-muted-foreground"> (Calculations in {BASE_APP_CURRENCY}, displayed in {displayCurrency})</p>
               </CardContent>
             </Card>
             <Card className="shadow-md bg-card">
@@ -501,19 +562,19 @@ export default function ExpensesPage() {
                     <CardTitle className="text-lg text-primary flex items-center"><Target className="mr-2"/>Budget for {selectedTrip?.name}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {tripBudget !== null ? (
+                    {tripBudgetForDisplay !== null ? (
                         <>
-                            <p className="text-2xl font-bold">{tripBudget.toFixed(2)} <span className="text-sm text-muted-foreground">{expensesForSelectedTrip.length > 0 ? expensesForSelectedTrip[0].currency : 'USD'}</span></p>
+                            <p className="text-2xl font-bold">{tripBudgetForDisplay.toFixed(2)} <span className="text-sm text-muted-foreground">{displayCurrency}</span></p>
                             <Progress value={budgetProgress} className="mt-2 h-3" />
                             <p className="text-xs text-muted-foreground mt-1">
-                                Spent: {totalGroupExpense.toFixed(2)} ({budgetProgress.toFixed(1)}%)
+                                Spent: {totalGroupExpenseForDisplay.toFixed(2)} {displayCurrency} ({budgetProgress.toFixed(1)}%)
                             </p>
-                            {totalGroupExpense > tripBudget && (
+                            {tripBudget !== null && totalGroupExpense > tripBudget && ( // Comparison in BASE_APP_CURRENCY
                                 <p className="text-xs text-destructive font-semibold mt-1">Budget exceeded!</p>
                             )}
                         </>
                     ) : (
-                        <p className="text-muted-foreground">No budget set yet for this trip.</p>
+                        <p className="text-muted-foreground">No budget set yet for this trip (in {BASE_APP_CURRENCY}).</p>
                     )}
                 </CardContent>
                 <CardFooter>
@@ -535,9 +596,31 @@ export default function ExpensesPage() {
                   <ChartContainer config={chartConfig} className="h-full w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                        <ChartTooltip 
+                            content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  const convertedValue = convertCurrency(data.total, BASE_APP_CURRENCY, displayCurrency);
+                                  return (
+                                    <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div className="flex flex-col">
+                                          <span className="text-[0.70rem] uppercase text-muted-foreground">
+                                            {data.name}
+                                          </span>
+                                          <span className="font-bold text-foreground">
+                                            {convertedValue.toFixed(2)} {displayCurrency}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                        />
                         <Pie
-                          data={expenseDataForChart}
+                          data={expenseDataForChart} // dataKey 'total' is in BASE_APP_CURRENCY
                           dataKey="total"
                           nameKey="name"
                           cx="50%"
@@ -564,7 +647,7 @@ export default function ExpensesPage() {
           <Card className="mb-8 shadow-lg bg-card">
             <CardHeader>
               <CardTitle className="text-xl text-primary flex items-center"><Users className="mr-2" /> User Balances for {selectedTrip?.name}</CardTitle>
-              <CardDescription>Summary of who owes money or is owed money. "Mark as Settled" helps track when debts are cleared.</CardDescription>
+              <CardDescription>Summary of who owes money or is owed money (in {displayCurrency}). "Mark as Settled" helps track when debts are cleared.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingExpenses ? (
@@ -573,45 +656,50 @@ export default function ExpensesPage() {
                  </div>
               ) : balances.length > 0 ? (
                 <ul className="space-y-3">
-                  {balances.map(balance => (
-                    <li key={balance.userId} className="p-3 rounded-lg border bg-background">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-foreground">{balance.userName}</p>
-                          <p className="text-xs text-muted-foreground">Paid: {balance.totalPaid.toFixed(2)}, Share: {balance.totalShare.toFixed(2)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`font-bold ${balance.isSettled ? 'text-green-600' : (balance.netBalance >= 0 ? 'text-green-600' : 'text-red-600')}`}>
-                            {balance.isSettled 
-                                ? <span className="flex items-center justify-end"><CheckCircle className="w-4 h-4 mr-1" />Settled</span>
-                                : (balance.netBalance >= 0 
-                                    ? `Owed: ${balance.netBalance.toFixed(2)}` 
-                                    : `Owes: ${Math.abs(balance.netBalance).toFixed(2)}`)}
-                          </p>
-                          {balance.netBalance < 0 && !balance.isSettled && (
-                            <Button
-                              onClick={() => handleMarkAsSettled(balance.userId)}
-                              size="sm"
-                              variant="outline"
-                              className="mt-1 text-xs h-auto py-1 px-2"
-                            >
-                              <CheckCircle className="w-3 h-3 mr-1" /> Mark as Settled
-                            </Button>
-                          )}
-                          {balance.netBalance > 0 && !balance.isSettled && (
-                            <Button
-                                onClick={() => toast({ title: "Reminder Sent (Simulation)", description: `A reminder to ${balance.userName} to settle up could be sent here.`})}
+                  {balances.map(balance => {
+                    const totalPaidForDisplay = convertCurrency(balance.totalPaid, BASE_APP_CURRENCY, displayCurrency);
+                    const totalShareForDisplay = convertCurrency(balance.totalShare, BASE_APP_CURRENCY, displayCurrency);
+                    const netBalanceForDisplay = convertCurrency(balance.netBalance, BASE_APP_CURRENCY, displayCurrency);
+                    return (
+                      <li key={balance.userId} className="p-3 rounded-lg border bg-background">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-semibold text-foreground">{balance.userName}</p>
+                            <p className="text-xs text-muted-foreground">Paid: {totalPaidForDisplay.toFixed(2)} {displayCurrency}, Share: {totalShareForDisplay.toFixed(2)} {displayCurrency}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-bold ${balance.isSettled ? 'text-green-600' : (netBalanceForDisplay >= 0 ? 'text-green-600' : 'text-red-600')}`}>
+                              {balance.isSettled 
+                                  ? <span className="flex items-center justify-end"><CheckCircle className="w-4 h-4 mr-1" />Settled</span>
+                                  : (netBalanceForDisplay >= 0 
+                                      ? `Owed: ${netBalanceForDisplay.toFixed(2)} ${displayCurrency}` 
+                                      : `Owes: ${Math.abs(netBalanceForDisplay).toFixed(2)} ${displayCurrency}`)}
+                            </p>
+                            {netBalanceForDisplay < 0 && !balance.isSettled && (
+                              <Button
+                                onClick={() => handleMarkAsSettled(balance.userId)}
                                 size="sm"
                                 variant="outline"
-                                className="mt-1 text-xs h-auto py-1 px-2 border-primary text-primary hover:bg-primary/10"
-                            >
-                                <Send className="w-3 h-3 mr-1" /> Remind
-                            </Button>
-                          )}
+                                className="mt-1 text-xs h-auto py-1 px-2"
+                              >
+                                <CheckCircle className="w-3 h-3 mr-1" /> Mark as Settled
+                              </Button>
+                            )}
+                            {netBalanceForDisplay > 0 && !balance.isSettled && (
+                              <Button
+                                  onClick={() => toast({ title: "Reminder Sent (Simulation)", description: `A reminder to ${balance.userName} to settle up could be sent here.`})}
+                                  size="sm"
+                                  variant="outline"
+                                  className="mt-1 text-xs h-auto py-1 px-2 border-primary text-primary hover:bg-primary/10"
+                              >
+                                  <Send className="w-3 h-3 mr-1" /> Remind
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="text-muted-foreground">No balances to display for this trip. Add some expenses or ensure trip members are correctly loaded!</p>
@@ -621,9 +709,7 @@ export default function ExpensesPage() {
           
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-semibold text-primary">All Expenses for {selectedTrip?.name}</h2>
-            <Button variant="outline" onClick={handleDownloadReport} disabled={!selectedTripId}>
-                <Download className="mr-2 h-4 w-4" /> Download Report
-            </Button>
+             {/* Download Report Button Removed */}
           </div>
           
           {isLoadingExpenses ? (
@@ -704,28 +790,7 @@ export default function ExpensesPage() {
         </Card>
       )}
       
-       <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="shadow-md bg-card opacity-70">
-              <CardHeader>
-                  <CardTitle className="text-lg text-primary flex items-center"><Bell className="mr-2 h-5 w-5"/>Notifications & Alerts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <p className="text-muted-foreground">Real-time notifications for new expenses, payments, overdue alerts and currency conversion are planned for a future update.</p>
-                   <p className="mt-2 text-xs text-muted-foreground">Overdue alerts for unsettled balances will also be part of this system.</p>
-                   <p className="mt-2 text-xs text-muted-foreground">You will also be notified if trip spending exceeds the set budget.</p>
-              </CardContent>
-          </Card>
-          <Card className="shadow-md bg-card opacity-70">
-              <CardHeader>
-                  <CardTitle className="text-lg text-primary flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Currency Features</CardTitle>
-              </CardHeader>
-              <CardContent>
-                  <p className="text-muted-foreground">Advanced currency conversion and handling multiple currencies for expenses are planned for future enhancements.</p>
-              </CardContent>
-          </Card>
-       </div>
-
+       {/* Removed Notification & Currency Feature Cards */}
     </div>
   );
 }
-
