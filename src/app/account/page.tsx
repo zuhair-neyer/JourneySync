@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect } from 'react';
@@ -12,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, UserCog, Shield } from 'lucide-react'; // Changed ShieldKeyhole to Shield
+import { Loader2, UserCog, Shield } from 'lucide-react'; 
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,7 +38,7 @@ export default function AccountPage() {
   const nameForm = useForm<UpdateNameFormValues>({
     resolver: zodResolver(updateNameSchema),
     defaultValues: {
-      name: currentUser?.displayName || "",
+      name: "", // Initial default, will be updated by useEffect
     },
   });
 
@@ -56,18 +55,24 @@ export default function AccountPage() {
       router.push('/login');
     }
     if (currentUser) {
+        // Reset form with current user's display name or empty string
         nameForm.reset({ name: currentUser.displayName || "" });
     }
   }, [currentUser, authLoading, router, nameForm]);
 
 
   const onUpdateNameSubmit = async (data: UpdateNameFormValues) => {
+    if (!data.name.trim()) {
+        toast({ variant: "destructive", title: "Validation Error", description: "Name cannot be empty or just spaces." });
+        nameForm.setError("name", { type: "manual", message: "Name cannot be empty or just spaces." });
+        return;
+    }
     await updateUserProfile(data.name);
   };
 
   const onUpdatePasswordSubmit = async (data: UpdatePasswordFormValues) => {
     await updateUserPassword(data.newPassword);
-    passwordForm.reset(); // Clear password fields after submission
+    passwordForm.reset(); 
   };
 
   if (authLoading || !currentUser) {
@@ -124,7 +129,7 @@ export default function AccountPage() {
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-xl flex items-center"><Shield className="mr-2 h-6 w-6" /> Change Password</CardTitle> {/* Changed ShieldKeyhole to Shield */}
+          <CardTitle className="text-xl flex items-center"><Shield className="mr-2 h-6 w-6" /> Change Password</CardTitle> 
           <CardDescription>Update your account password. Make sure it's strong and unique.</CardDescription>
         </CardHeader>
         <CardContent>

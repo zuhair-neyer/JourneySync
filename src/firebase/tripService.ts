@@ -1,4 +1,3 @@
-
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo } from '@/types';
@@ -33,7 +32,9 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       return null;
     }
     
-    const memberName = userInfo.displayName || userInfo.email || userInfo.uid; // Prioritize displayName, then email, then UID
+    const memberName = (userInfo.displayName && userInfo.displayName.trim() !== "") 
+                       ? userInfo.displayName.trim() 
+                       : (userInfo.email || userInfo.uid);
 
     const newTripData: Omit<Trip, 'id'> = {
       name: tripName,
@@ -64,7 +65,6 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     if (error.code === 'PERMISSION_DENIED') {
         console.error("[tripService] PERMISSION DENIED. This is a critical error. Please check your Firebase Realtime Database rules for the '/trips' and '/users' paths. Ensure authenticated users have write permissions to 'trips/{newTripId}' and 'users/{userId}/trips/{newTripId}'.");
     }
-    // Other potential errors could be network issues, data validation issues if rules are complex, or quota limits.
     return null;
   }
 }
@@ -94,7 +94,6 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
 
     if (tripData.members && tripData.members[userInfo.uid]) {
       console.log("[tripService] User is already a member of this trip:", tripId);
-      // Ensure the user's local trip list is consistent
       const userTripRef = ref(database, `users/${userInfo.uid}/trips/${tripId}`);
       const userTripSnapshot = await get(userTripRef);
       if (!userTripSnapshot.exists() || userTripSnapshot.val().name !== tripData.name) {
@@ -103,13 +102,15 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       return true; 
     }
     
-    const memberName = userInfo.displayName || userInfo.email || userInfo.uid; // Prioritize displayName, then email, then UID
+    const memberName = (userInfo.displayName && userInfo.displayName.trim() !== "") 
+                       ? userInfo.displayName.trim()
+                       : (userInfo.email || userInfo.uid);
 
     const memberData: TripMember = {
       uid: userInfo.uid,
       name: memberName,
       email: userInfo.email,
-      joinedAt: serverTimestamp() as any, // Firebase server timestamp
+      joinedAt: serverTimestamp() as any,
     };
 
     if (!tripData.name) {
@@ -117,11 +118,10 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
         return false; 
     }
 
-    // Using 'update' for atomic multi-path updates
     const updates: { [key: string]: any } = {};
     updates[`/trips/${tripId}/members/${userInfo.uid}`] = memberData;
     updates[`/users/${userInfo.uid}/trips/${tripId}`] = {
-      name: tripData.name, // Make sure to use the actual trip name
+      name: tripData.name,
       role: 'member',
     };
     
@@ -191,4 +191,3 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     return null;
   }
 }
-
