@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react'; 
@@ -39,8 +38,13 @@ export function CreateTripForm() {
       console.error("[CreateTripForm] handleSubmit: currentUser is null.");
       return;
     }
+    
+    console.log("[CreateTripForm] handleSubmit: currentUser.displayName at submission time:", currentUser.displayName);
+    console.log("[CreateTripForm] handleSubmit: Full currentUser object AT POINT OF SUBMISSION:", JSON.stringify({uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email}));
+
+
     if (!currentUser.displayName || currentUser.displayName.trim() === "") {
-      toast({ variant: "destructive", title: "Display Name Not Set", description: "Your display name is syncing. Please wait a moment and try again, or update it in your account settings." });
+      toast({ variant: "destructive", title: "Display Name Not Set", description: "Your display name might still be syncing or is not set. Please wait a moment, ensure it's set in your account settings, and try again." });
       console.error("[CreateTripForm] handleSubmit: currentUser.displayName is missing or empty. CurrentUser:", { uid: currentUser.uid, email: currentUser.email, displayName: currentUser.displayName});
       setIsLoading(false);
       return;
@@ -50,15 +54,12 @@ export function CreateTripForm() {
       return;
     }
 
-    console.log("[CreateTripForm] handleSubmit: currentUser.displayName AT POINT OF SUBMISSION:", currentUser.displayName);
-    console.log("[CreateTripForm] handleSubmit: Full currentUser object AT POINT OF SUBMISSION:", JSON.stringify({uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email}));
-
     setIsLoading(true);
     setCreatedTripId(null);
 
     const basicUserInfo = {
       uid: currentUser.uid,
-      displayName: currentUser.displayName,
+      displayName: currentUser.displayName, // This displayName should be valid due to the check above
       email: currentUser.email,
     };
     console.log("[CreateTripForm] handleSubmit: basicUserInfo being sent to createTripInDb:", basicUserInfo);
@@ -127,4 +128,3 @@ export function CreateTripForm() {
     </Card>
   );
 }
-
