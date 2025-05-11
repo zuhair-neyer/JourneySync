@@ -32,26 +32,8 @@ export default function PollsPage() {
   
   useEffect(() => {
     // Load polls from localStorage or API if needed
-    const initialPolls: Poll[] = [
-      { 
-        id: '1', 
-        question: 'Where should we have dinner on Friday?', 
-        options: [
-          { id: 'opt1a', text: 'Italian Place', votes: 3 },
-          { id: 'opt1b', text: 'Sushi Restaurant', votes: 5 },
-          { id: 'opt1c', text: 'Local Cuisine', votes: 2 },
-        ],
-      },
-      { 
-        id: '2', 
-        question: 'Which activity for Saturday morning?', 
-        options: [
-          { id: 'opt2a', text: 'Museum Visit', votes: 4 },
-          { id: 'opt2b', text: 'Hiking Trail', votes: 3 },
-          { id: 'opt2c', text: 'Shopping Spree', votes: 3 },
-        ],
-      },
-    ];
+    // No initial polls by default
+    const initialPolls: Poll[] = [];
     setPolls(initialPolls);
   }, []);
 
@@ -220,3 +202,4 @@ export default function PollsPage() {
     </div>
   );
 }
+
