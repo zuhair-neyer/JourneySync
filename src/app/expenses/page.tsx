@@ -91,13 +91,10 @@ export default function ExpensesPage() {
       setUsers([{ id: 'user1', name: 'Guest User (You)'}, ...mockUsers]);
     }
     
-    const initialExpenses: Expense[] = [
-        // { id: '1', description: 'Group Dinner', amount: 120, currency: 'USD', category: 'Food', paidByUserId: currentUser?.uid || 'user1', date: '2024-07-20', participantIds: [currentUser?.uid || 'user1', 'user2', 'user3'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
-        // { id: '2', description: 'Museum Tickets', amount: 45, currency: 'USD', category: 'Activities', paidByUserId: 'user2', date: '2024-07-21', participantIds: [currentUser?.uid || 'user1', 'user2'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
-        // { id: '3', description: 'Souvenirs', amount: 60, currency: 'EUR', category: 'Shopping', paidByUserId: 'user3', date: '2024-07-22', participantIds: ['user3', currentUser?.uid || 'user1'], tripId: userTrips.length > 1 ? userTrips[1].id : 'trip2' },
-    ];
-    setAllExpenses(initialExpenses); // Start with no mock expenses for truly empty state
-  }, [currentUser]); // Removed userTrips dependency to avoid re-populating mock data on trip changes
+    // Start with no mock expenses for truly empty state
+    // const initialExpenses: Expense[] = []; 
+    // setAllExpenses(initialExpenses);
+  }, [currentUser]); 
 
   // Filter expenses whenever selectedTripId or allExpenses change
   useEffect(() => {
@@ -128,19 +125,11 @@ export default function ExpensesPage() {
     const activeUsers = usersInCurrentTrip;
     const expensesToProcess = filteredExpenses;
 
-    // If no trip is selected, or if a selected trip has no active users, 
-    // or if a selected trip has no expenses, then the balances section should be "empty" (show placeholder).
-    if (!selectedTripId || activeUsers.length === 0 || (selectedTripId && expensesToProcess.length === 0)) {
+    if (!selectedTripId || activeUsers.length === 0 || expensesToProcess.length === 0) {
       setBalances([]);
       setTotalGroupExpense(0);
       return;
     }
-
-    // If we reach here, it means:
-    // 1. A trip IS selected (selectedTripId is not null)
-    // 2. The selected trip HAS active users (activeUsers.length > 0)
-    // 3. The selected trip HAS expenses (expensesToProcess.length > 0)
-    // So, proceed with the full calculation.
 
     let newTotalGroupExpense = 0;
     const userExpensesSummary: { [userId: string]: { paid: number; share: number } } = {};
@@ -151,19 +140,17 @@ export default function ExpensesPage() {
 
     expensesToProcess.forEach(expense => {
       newTotalGroupExpense += expense.amount;
-      // Only count payment if payer is part of the active users for this trip context
       if (userExpensesSummary[expense.paidByUserId] && activeUsers.some(u => u.id === expense.paidByUserId)) {
         userExpensesSummary[expense.paidByUserId].paid += expense.amount;
       }
 
-      // Filter participants to only those active in the current trip
       const participantsInExpenseForThisTrip = expense.participantIds.filter(pid => activeUsers.some(u => u.id === pid));
       const numParticipants = participantsInExpenseForThisTrip.length;
 
       if (numParticipants > 0) {
         const sharePerParticipant = expense.amount / numParticipants;
         participantsInExpenseForThisTrip.forEach(pid => {
-          if (userExpensesSummary[pid]) { // This check implies pid is in activeUsers
+          if (userExpensesSummary[pid]) { 
             userExpensesSummary[pid].share += sharePerParticipant;
           }
         });
@@ -621,7 +608,7 @@ export default function ExpensesPage() {
           )}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredExpenses.map(expense => {
-                const paidByUser = usersInCurrentTrip.find(u => u.id === expense.paidByUserId) || users.find(u => u.id === expense.paidByUserId) ; // Fallback to global users if not in trip (e.g. old data)
+                const paidByUser = usersInCurrentTrip.find(u => u.id === expense.paidByUserId) || users.find(u => u.id === expense.paidByUserId) ; 
                 const CategoryIcon = categoryIcons[expense.category] || DollarSign;
                 return (
                 <Card key={expense.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col bg-card">
@@ -635,7 +622,7 @@ export default function ExpensesPage() {
                     <CardContent className="flex-grow text-sm">
                     <p className="text-muted-foreground">Paid by: <span className="font-medium text-foreground">{paidByUser?.name || 'Unknown User'}</span></p>
                     <p className="text-muted-foreground mt-1">Participants: <span className="font-medium text-foreground">{expense.participantIds.map(pid => (usersInCurrentTrip.find(u=>u.id===pid) || users.find(u=>u.id===pid))?.name || 'Unknown').join(', ')}</span></p>
-                    <p className="text-xs text-muted-foreground mt-1">Split: Equally among participants</p>
+                    
                     </CardContent>
                     <CardFooter className="flex justify-end gap-2 border-t pt-4">
                     <Button variant="ghost" size="icon" onClick={() => handleEditExpense(expense)} className="text-muted-foreground hover:text-primary">
