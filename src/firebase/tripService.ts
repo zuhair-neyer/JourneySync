@@ -1,7 +1,7 @@
 
 'use server';
 import { database } from '@/firebase/config';
-import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment } from '@/types';
+import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment, PackingItem } from '@/types';
 import { ref, push, set, get, child, update, serverTimestamp, remove } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
@@ -71,6 +71,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       expenses: {},
       polls: {}, 
       itinerary: {}, 
+      packingList: {},
     };
     await set(newTripRef, newTripData);
 
@@ -232,6 +233,7 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         expenses: tripData.expenses || {}, 
         polls: tripData.polls || {},
         itinerary: tripData.itinerary || {},
+        packingList: tripData.packingList || {},
       } as Trip;
 
       if (tripData.createdBy && !processedMembers[tripData.createdBy]) {
@@ -624,6 +626,83 @@ export async function addCommentToItineraryItemDb(tripId: string, itemId: string
   } catch (error: any) {
     console.error(`[tripService] addCommentToItineraryItemDb: Error adding comment to item ${itemId} in trip ${tripId}:`, error.message);
     return null;
+  }
+}
+
+
+// Packing List related functions
+export async function addPackingItemToTripDb(tripId: string, itemData: Omit<PackingItem, 'id'>): Promise<string | null> {
+  if (!tripId) {
+    console.error("[tripService] addPackingItemToTripDb: Trip ID is required.");
+    return null;
+  }
+  try {
+    const packingListRef = ref(database, `trips/${tripId}/packingList`);
+    const newItemRef = push(packingListRef);
+    const itemId = newItemRef.key;
+
+    if (!itemId) {
+      console.error("[tripService] addPackingItemToTripDb: Failed to generate packing item ID.");
+      return null;
+    }
+    
+    await set(newItemRef, itemData); // Store Omit<PackingItem, 'id'>
+    return itemId;
+  } catch (error: any) {
+    console.error(`[tripService] addPackingItemToTripDb: Error adding packing item to trip ${tripId}:`, error.message);
+    return null;
+  }
+}
+
+export async function getPackingListForTripFromDb(tripId: string): Promise<PackingItem[]> {
+  if (!tripId) {
+    return [];
+  }
+  try {
+    const packingListRef = ref(database, `trips/${tripId}/packingList`);
+    const snapshot = await get(packingListRef);
+    if (snapshot.exists()) {
+      const itemsData = snapshot.val();
+      const itemsArray: PackingItem[] = Object.keys(itemsData).map(itemId => ({
+        id: itemId,
+        ...itemsData[itemId], // Spread the rest of the properties (name, packed, category)
+      }));
+      return itemsArray;
+    }
+    return [];
+  } catch (error: any) {
+    console.error(`[tripService] getPackingListForTripFromDb: Error fetching packing list for trip ${tripId}:`, error.message);
+    return [];
+  }
+}
+
+export async function updatePackingItemInTripDb(tripId: string, itemId: string, itemData: Partial<Omit<PackingItem, 'id'>>): Promise<boolean> {
+  if (!tripId || !itemId) {
+    console.error("[tripService] updatePackingItemInTripDb: Trip ID and Item ID are required.");
+    return false;
+  }
+  try {
+    const itemRef = ref(database, `trips/${tripId}/packingList/${itemId}`);
+    await update(itemRef, itemData);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] updatePackingItemInTripDb: Error updating packing item ${itemId} in trip ${tripId}:`, error.message);
+    return false;
+  }
+}
+
+export async function deletePackingItemFromTripDb(tripId: string, itemId: string): Promise<boolean> {
+  if (!tripId || !itemId) {
+    console.error("[tripService] deletePackingItemFromTripDb: Trip ID and Item ID are required.");
+    return false;
+  }
+  try {
+    const itemRef = ref(database, `trips/${tripId}/packingList/${itemId}`);
+    await remove(itemRef);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] deletePackingItemFromTripDb: Error deleting packing item ${itemId} from trip ${tripId}:`, error.message);
+    return false;
   }
 }
 

@@ -46,6 +46,15 @@ export interface ItineraryItem {
   comments: ItineraryComment[]; 
 }
 
+export interface PackingItem {
+  id: string; // Firebase key for the item
+  name: string;
+  packed: boolean;
+  category: string; 
+  // tripId is implicit by its location in the DB under trips/{tripId}/packingList/{itemId}
+  // It can be added client-side if needed when items are fetched.
+}
+
 export interface Trip {
   id: string;
   name:string;
@@ -55,13 +64,16 @@ export interface Trip {
     [uid: string]: TripMember;
   };
   expenses?: { 
-    [expenseId: string]: Expense;
+    [expenseId: string]: Expense; // Stores the full Expense object, id is the key
   };
   polls?: { 
     [pollId: string]: Omit<Poll, 'id' | 'tripId'>; 
   };
   itinerary?: {
     [itemId: string]: Omit<ItineraryItem, 'id' | 'tripId'>;
+  };
+  packingList?: { // Represents the structure in Firebase
+    [itemId: string]: Omit<PackingItem, 'id'>; // itemId is the PackingItem.id, object stores other props
   };
 }
 
