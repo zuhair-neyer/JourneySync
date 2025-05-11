@@ -1,3 +1,4 @@
+
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo } from '@/types';
@@ -11,7 +12,7 @@ interface BasicUserInfo {
 }
 
 export async function createTripInDb(tripName: string, userInfo: BasicUserInfo): Promise<string | null> {
-  console.log("[tripService] Attempting to create trip. Name:", tripName, "User ID:", userInfo.uid);
+  console.log("[tripService] Attempting to create trip. Name:", tripName, "User ID:", userInfo.uid, "Display Name:", userInfo.displayName);
 
   if (!tripName.trim()) {
     console.error("[tripService] Trip name cannot be empty.");
@@ -32,6 +33,8 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       return null;
     }
     
+    const memberName = userInfo.displayName || userInfo.email || userInfo.uid; // Prioritize displayName, then email, then UID
+
     const newTripData: Omit<Trip, 'id'> = {
       name: tripName,
       createdBy: userInfo.uid,
@@ -39,7 +42,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       members: {
         [userInfo.uid]: {
           uid: userInfo.uid,
-          name: userInfo.displayName ?? "Anonymous User", 
+          name: memberName, 
           email: userInfo.email,
           joinedAt: serverTimestamp() as any, // Firebase server timestamp
         },
@@ -67,7 +70,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
 }
 
 export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Promise<boolean> {
-  console.log("[tripService] Attempting to join trip. TripID:", tripId, "User ID:", userInfo.uid);
+  console.log("[tripService] Attempting to join trip. TripID:", tripId, "User ID:", userInfo.uid, "Display Name:", userInfo.displayName);
 
   if (!tripId.trim()) {
     console.error("[tripService] Trip ID cannot be empty for joining.");
@@ -100,9 +103,11 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       return true; 
     }
     
+    const memberName = userInfo.displayName || userInfo.email || userInfo.uid; // Prioritize displayName, then email, then UID
+
     const memberData: TripMember = {
       uid: userInfo.uid,
-      name: userInfo.displayName ?? "Anonymous User",
+      name: memberName,
       email: userInfo.email,
       joinedAt: serverTimestamp() as any, // Firebase server timestamp
     };
@@ -186,3 +191,4 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     return null;
   }
 }
+

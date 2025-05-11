@@ -69,20 +69,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       if (userCredential.user) {
-        await updateProfile(userCredential.user, {
+        const userToUpdate = userCredential.user;
+        await updateProfile(userToUpdate, {
           displayName: name,
         });
-        // Reload the user to ensure the profile update (displayName) is reflected in auth.currentUser
-        await userCredential.user.reload();
-        // Fetch the latest user object which should include the updated profile
-        const updatedUser = auth.currentUser; 
-        // Ensure a new object reference for state update
-        setCurrentUser(updatedUser ? { ...updatedUser } as FirebaseUser : null);
+        // Reload the user to ensure the profile update (displayName) is reflected in auth.currentUser and userToUpdate
+        await userToUpdate.reload(); 
+        
+        // Ensure a new object reference for state update using the reloaded user object
+        setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
+        
+        toast({ title: "Success", description: "Account created successfully!" });
+        router.push('/'); 
+        return userToUpdate; // Return the user object that should now have displayName
       }
-      
-      toast({ title: "Success", description: "Account created successfully!" });
-      router.push('/'); 
-      return auth.currentUser;
+      return null; // Should not happen if userCredential.user exists
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
@@ -141,12 +142,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setLoading(true);
     setError(null);
     try {
-      await updateProfile(auth.currentUser, { displayName: name });
+      const userToUpdate = auth.currentUser;
+      await updateProfile(userToUpdate, { displayName: name });
       // Reload the user to ensure the profile update (displayName) is reflected
-      await auth.currentUser.reload();
-      // Update local currentUser state by re-fetching from auth.currentUser
+      await userToUpdate.reload();
+      // Update local currentUser state by re-fetching from auth.currentUser (which is userToUpdate after reload)
       // Ensure a new object reference for state update
-      setCurrentUser(auth.currentUser ? { ...auth.currentUser } as FirebaseUser : null);
+      setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
       const authError = e as AuthError;
