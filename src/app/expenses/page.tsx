@@ -365,52 +365,52 @@ export default function ExpensesPage() {
               {editingExpenseId ? 'Update the details for this expense.' : 'Fill in the details for the new expense.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">Description <span className="text-destructive">*</span></Label>
-              <Input id="description" name="description" value={currentExpense.description || ''} onChange={handleInputChange} className="col-span-3 bg-background" placeholder="e.g., Lunch with team" />
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-x-4 gap-y-2">
+              <Label htmlFor="description" className="sm:text-right sm:col-span-1">Description <span className="text-destructive">*</span></Label>
+              <Input id="description" name="description" value={currentExpense.description || ''} onChange={handleInputChange} className="sm:col-span-3 bg-background" placeholder="e.g., Lunch with team" />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">Amount <span className="text-destructive">*</span></Label>
-              <Input id="amount" name="amount" type="number" value={currentExpense.amount || ''} onChange={handleInputChange} className="col-span-3 bg-background" placeholder="e.g., 50.00" />
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-x-4 gap-y-2">
+              <Label htmlFor="amount" className="sm:text-right sm:col-span-1">Amount <span className="text-destructive">*</span></Label>
+              <Input id="amount" name="amount" type="number" value={currentExpense.amount || ''} onChange={handleInputChange} className="sm:col-span-3 bg-background" placeholder="e.g., 50.00" />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="currency" className="text-right">Currency <span className="text-destructive">*</span></Label>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-x-4 gap-y-2">
+              <Label htmlFor="currency" className="sm:text-right sm:col-span-1">Currency <span className="text-destructive">*</span></Label>
               <Select name="currency" value={currentExpense.currency} onValueChange={handleSelectChange('currency')}>
-                <SelectTrigger className="col-span-3 bg-background"><SelectValue placeholder="Select currency" /></SelectTrigger>
+                <SelectTrigger className="sm:col-span-3 bg-background"><SelectValue placeholder="Select currency" /></SelectTrigger>
                 <SelectContent>
                   {currencies.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="category" className="text-right">Category <span className="text-destructive">*</span></Label>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-x-4 gap-y-2">
+              <Label htmlFor="category" className="sm:text-right sm:col-span-1">Category <span className="text-destructive">*</span></Label>
               <Select name="category" value={currentExpense.category} onValueChange={handleSelectChange('category')}>
-                <SelectTrigger className="col-span-3 bg-background"><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectTrigger className="sm:col-span-3 bg-background"><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
                   {expenseCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="paidByUserId" className="text-right">Paid By <span className="text-destructive">*</span></Label>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-x-4 gap-y-2">
+              <Label htmlFor="paidByUserId" className="sm:text-right sm:col-span-1">Paid By <span className="text-destructive">*</span></Label>
               <Select name="paidByUserId" value={currentExpense.paidByUserId} onValueChange={handleSelectChange('paidByUserId')}>
-                <SelectTrigger className="col-span-3 bg-background"><SelectValue placeholder="Select who paid" /></SelectTrigger>
+                <SelectTrigger className="sm:col-span-3 bg-background"><SelectValue placeholder="Select who paid" /></SelectTrigger>
                 <SelectContent>
                   {usersInCurrentTrip.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="date" className="text-right">Date <span className="text-destructive">*</span></Label>
-              <Input id="date" name="date" type="date" value={currentExpense.date || ''} onChange={handleInputChange} className="col-span-3 bg-background"/>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-x-4 gap-y-2">
+              <Label htmlFor="date" className="sm:text-right sm:col-span-1">Date <span className="text-destructive">*</span></Label>
+              <Input id="date" name="date" type="date" value={currentExpense.date || ''} onChange={handleInputChange} className="sm:col-span-3 bg-background"/>
             </div>
             
-            <Separator className="col-span-4 my-2" />
+            <Separator className="my-2" />
 
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label className="text-right pt-2">Participants <span className="text-destructive">*</span></Label>
-              <div className="col-span-3 space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-x-4 gap-y-2">
+              <Label className="sm:text-right sm:col-span-1 pt-2">Participants <span className="text-destructive">*</span></Label>
+              <div className="sm:col-span-3 space-y-2">
                 {usersInCurrentTrip.map(user => (
                   <div key={user.id} className="flex items-center space-x-2">
                     <Checkbox
@@ -427,14 +427,7 @@ export default function ExpensesPage() {
                  </div>
               </div>
             </div>
-            <Card className="mt-2 col-span-4">
-                <CardHeader className="p-2">
-                    <CardTitle className="text-sm flex items-center"><AlertTriangle className="w-4 h-4 mr-1 text-yellow-500" />Split Logic</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 text-xs text-muted-foreground">
-                    Currently, all expenses are split equally among selected participants. Uneven splits and currency conversion will be added in a future update.
-                </CardContent>
-            </Card>
+            {/* Removed Split Logic Card */}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsExpenseDialogOpen(false)}>Cancel</Button>
