@@ -271,14 +271,7 @@ export default function ItineraryPage() {
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-xl text-primary">{item.title}</CardTitle>
-                  <Image 
-                    src={`https://picsum.photos/seed/${item.id}/100/75`} 
-                    alt={item.title}
-                    width={100} 
-                    height={75} 
-                    className="rounded-md object-cover"
-                    data-ai-hint="landmark travel"
-                  />
+                  {/* Image removed as per user request */}
                 </div>
                 <CardDescription>{item.description}</CardDescription>
                  <p className="text-xs text-muted-foreground">
@@ -323,3 +316,4 @@ export default function ItineraryPage() {
     </div>
   );
 }
+
