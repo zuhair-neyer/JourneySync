@@ -21,36 +21,44 @@ export function CreateTripForm() {
 
   useEffect(() => {
     if (currentUser) {
-      console.log("[CreateTripForm] currentUser updated in useEffect:", { 
-        uid: currentUser.uid, 
-        displayName: currentUser.displayName, 
-        email: currentUser.email 
-      });
+      console.log("[CreateTripForm] useEffect: currentUser state updated. UID:", currentUser.uid, "Display Name:", currentUser.displayName, "Email:", currentUser.email);
     } else {
-      console.log("[CreateTripForm] currentUser is null in useEffect");
+      console.log("[CreateTripForm] useEffect: currentUser is null.");
     }
   }, [currentUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[CreateTripForm] handleSubmit triggered.");
+
     if (!currentUser) {
       toast({ variant: "destructive", title: "Error", description: "You must be logged in to create a trip." });
-      console.error("[CreateTripForm] handleSubmit: currentUser is null.");
+      console.error("[CreateTripForm] handleSubmit: currentUser is null. Cannot proceed.");
       return;
     }
     
-    console.log("[CreateTripForm] handleSubmit: currentUser.displayName at submission time:", currentUser.displayName);
-    console.log("[CreateTripForm] handleSubmit: Full currentUser object AT POINT OF SUBMISSION:", JSON.stringify({uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email}));
-
+    console.log("[CreateTripForm] handleSubmit: CurrentUser object at submission:", 
+      JSON.stringify({ 
+        uid: currentUser.uid, 
+        displayName: currentUser.displayName, 
+        email: currentUser.email,
+        emailVerified: currentUser.emailVerified 
+      })
+    );
 
     if (!currentUser.displayName || currentUser.displayName.trim() === "") {
-      toast({ variant: "destructive", title: "Display Name Not Set", description: "Your display name might still be syncing or is not set. Please wait a moment, ensure it's set in your account settings, and try again." });
-      console.error("[CreateTripForm] handleSubmit: currentUser.displayName is missing or empty. CurrentUser:", { uid: currentUser.uid, email: currentUser.email, displayName: currentUser.displayName});
+      toast({ 
+        variant: "destructive", 
+        title: "Display Name Not Set", 
+        description: "Your display name might still be syncing or is not set. Please wait a moment, ensure it's set in your account settings, and try again." 
+      });
+      console.error("[CreateTripForm] handleSubmit: currentUser.displayName is missing or empty. displayName value:", `"${currentUser.displayName}"`);
       setIsLoading(false);
       return;
     }
     if (!tripName.trim()) {
       toast({ variant: "destructive", title: "Error", description: "Trip name cannot be empty." });
+      console.error("[CreateTripForm] handleSubmit: Trip name is empty.");
       return;
     }
 
@@ -59,10 +67,10 @@ export function CreateTripForm() {
 
     const basicUserInfo = {
       uid: currentUser.uid,
-      displayName: currentUser.displayName, // This displayName should be valid due to the check above
+      displayName: currentUser.displayName, 
       email: currentUser.email,
     };
-    console.log("[CreateTripForm] handleSubmit: basicUserInfo being sent to createTripInDb:", basicUserInfo);
+    console.log("[CreateTripForm] handleSubmit: Prepared basicUserInfo to send to createTripInDb:", JSON.stringify(basicUserInfo));
 
     const newTripId = await createTripInDb(tripName, basicUserInfo);
     setIsLoading(false);
@@ -72,6 +80,7 @@ export function CreateTripForm() {
       setCreatedTripId(newTripId);
       setTripName('');
       refreshUserTrips();
+      console.log("[CreateTripForm] handleSubmit: Trip creation successful. New Trip ID:", newTripId);
     } else {
       toast({ variant: "destructive", title: "Error", description: "Failed to create trip. Please check server logs for details." });
       console.error("[CreateTripForm] Client-side: createTripInDb returned null. This usually indicates a server-side error with Firebase (e.g., permission denied, misconfiguration). Check your Next.js server console logs for detailed Firebase error messages from 'tripService.ts'.");
@@ -119,7 +128,11 @@ export function CreateTripForm() {
           )}
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading || !currentUser || !currentUser.displayName || currentUser.displayName.trim() === ""}>
+          <Button 
+            type="submit" 
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" 
+            disabled={isLoading || !currentUser || !currentUser.displayName || currentUser.displayName.trim() === ""}
+          >
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Create Trip
           </Button>

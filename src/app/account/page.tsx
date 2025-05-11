@@ -57,11 +57,13 @@ export default function AccountPage() {
     if (currentUser) {
         // Reset form with current user's display name or empty string
         nameForm.reset({ name: currentUser.displayName || "" });
+        console.log("[AccountPage] useEffect: currentUser.displayName set in form:", currentUser.displayName);
     }
   }, [currentUser, authLoading, router, nameForm]);
 
 
   const onUpdateNameSubmit = async (data: UpdateNameFormValues) => {
+    console.log("[AccountPage] onUpdateNameSubmit: Attempting to update name to:", data.name);
     if (!data.name.trim()) {
         toast({ variant: "destructive", title: "Validation Error", description: "Name cannot be empty or just spaces." });
         nameForm.setError("name", { type: "manual", message: "Name cannot be empty or just spaces." });

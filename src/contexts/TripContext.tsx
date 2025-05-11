@@ -44,7 +44,6 @@ export function TripProvider({ children }: TripProviderProps) {
   const [errorUserTrips, setErrorUserTrips] = useState<string | null>(null);
   const [errorSelectedTrip, setErrorSelectedTrip] = useState<string | null>(null);
 
-  const currentUid = currentUser?.uid;
 
   const fetchUserTrips = useCallback(async (uid: string) => {
     setIsLoadingUserTrips(true);
@@ -61,14 +60,14 @@ export function TripProvider({ children }: TripProviderProps) {
     } finally {
       setIsLoadingUserTrips(false);
     }
-  }, []);
+  }, []); // Memoize fetchUserTrips, it doesn't depend on external state that changes frequently within TripProvider
 
   useEffect(() => {
-    if (currentUid) {
-      console.log(`[TripContext] currentUser changed or component mounted. UID: ${currentUid}. Fetching user trips.`);
-      fetchUserTrips(currentUid);
+    if (currentUser?.uid) {
+      console.log(`[TripContext] currentUser or UID changed. UID: ${currentUser.uid}. Fetching user trips.`);
+      fetchUserTrips(currentUser.uid);
     } else {
-      console.log("[TripContext] No currentUser. Clearing user trips and selected trip.");
+      console.log("[TripContext] No currentUser or UID. Clearing user trips and selected trip.");
       setUserTrips([]);
       setSelectedTripId(null); 
       setSelectedTrip(null);
@@ -76,7 +75,7 @@ export function TripProvider({ children }: TripProviderProps) {
       setErrorUserTrips(null);
       setErrorSelectedTrip(null);
     }
-  }, [currentUid, fetchUserTrips]);
+  }, [currentUser?.uid, fetchUserTrips]); // Depend on currentUser.uid and the memoized fetchUserTrips
 
 
   const fetchSelectedTripDetails = useCallback(async () => {
@@ -105,24 +104,24 @@ export function TripProvider({ children }: TripProviderProps) {
     } finally {
       setIsLoadingSelectedTrip(false);
     }
-  }, [selectedTripId]);
+  }, [selectedTripId]); // fetchSelectedTripDetails is memoized with selectedTripId as dependency
 
   useEffect(() => {
+    // This effect runs when selectedTripId changes (via fetchSelectedTripDetails dependency)
+    // or when the current logged-in user's display name changes,
+    // prompting a re-fetch of the selected trip details which might contain the user's updated name.
+    console.log("[TripContext] useEffect for fetchSelectedTripDetails triggered. selectedTripId:", selectedTripId, "currentUser.displayName:", currentUser?.displayName);
     fetchSelectedTripDetails();
-  }, [fetchSelectedTripDetails]); // fetchSelectedTripDetails is now memoized with selectedTripId as dependency
+  }, [fetchSelectedTripDetails, currentUser?.displayName]); 
 
   const refreshUserTrips = useCallback(() => {
-    if (currentUid) {
-      console.log(`[TripContext] refreshUserTrips called for UID: ${currentUid}.`);
-      fetchUserTrips(currentUid);
-      // Optionally, if a trip is selected, refresh its details too,
-      // as its member list or name might have changed by another user.
-      if (selectedTripId) {
-        console.log(`[TripContext] refreshUserTrips: Also refreshing selected trip details for tripId: ${selectedTripId}`);
-        fetchSelectedTripDetails();
-      }
+    if (currentUser?.uid) {
+      console.log(`[TripContext] refreshUserTrips called for UID: ${currentUser.uid}.`);
+      fetchUserTrips(currentUser.uid);
+      // fetchUserTrips will set isLoadingUserTrips. 
+      // The useEffect for selectedTripDetails will trigger if selectedTripId is set.
     }
-  }, [currentUid, fetchUserTrips, selectedTripId, fetchSelectedTripDetails]);
+  }, [currentUser?.uid, fetchUserTrips]);
 
   const refreshSelectedTripDetails = useCallback(() => {
     if (selectedTripId) {
@@ -140,7 +139,7 @@ export function TripProvider({ children }: TripProviderProps) {
     setSelectedTripId,
     isLoadingSelectedTrip,
     refreshUserTrips,
-    refreshSelectedTripDetails, // Add new function to context value
+    refreshSelectedTripDetails, 
     errorUserTrips,
     errorSelectedTrip,
   };

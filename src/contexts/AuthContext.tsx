@@ -55,41 +55,66 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        console.log("[AuthContext] onAuthStateChanged: User found. UID:", user.uid, "Initial displayName:", user.displayName);
+        console.log("[AuthContext] onAuthStateChanged: User found. UID:", user.uid, "Initial displayName from Firebase Auth:", user.displayName);
         try {
             await user.reload();
             const reloadedUser = auth.currentUser; 
-            console.log("[AuthContext] onAuthStateChanged: User reloaded. displayName after reload:", reloadedUser?.displayName, "UID:", reloadedUser?.uid);
-            // Create a new object instance for setCurrentUser to ensure React detects the change
-            // And ensure all relevant properties are included
+            console.log("[AuthContext] onAuthStateChanged: User reloaded. displayName after reload:", reloadedUser?.displayName, "Email:", reloadedUser?.email, "UID:", reloadedUser?.uid);
             if (reloadedUser) {
-                 setCurrentUser({
-                    ...reloadedUser,
+                 const userToSet = {
                     uid: reloadedUser.uid,
                     email: reloadedUser.email,
                     displayName: reloadedUser.displayName,
                     photoURL: reloadedUser.photoURL,
-                    // Add other necessary FirebaseUser properties
-                } as FirebaseUser);
+                    emailVerified: reloadedUser.emailVerified,
+                    isAnonymous: reloadedUser.isAnonymous,
+                    metadata: reloadedUser.metadata,
+                    providerData: reloadedUser.providerData,
+                    providerId: reloadedUser.providerId,
+                    refreshToken: reloadedUser.refreshToken,
+                    tenantId: reloadedUser.tenantId,
+                    delete: reloadedUser.delete,
+                    getIdToken: reloadedUser.getIdToken,
+                    getIdTokenResult: reloadedUser.getIdTokenResult,
+                    reload: reloadedUser.reload,
+                    toJSON: reloadedUser.toJSON,
+                } as FirebaseUser;
+                setCurrentUser(userToSet);
+                console.log("[AuthContext] onAuthStateChanged: setCurrentUser with reloaded user. Context displayName:", userToSet.displayName);
             } else {
                 setCurrentUser(null);
+                 console.log("[AuthContext] onAuthStateChanged: reloadedUser was null after reload.");
             }
         } catch (reloadError: any) {
-            console.error("[AuthContext] onAuthStateChanged: Error reloading user:", reloadError.message, "Using user object as is.");
-             if (user) {
-                setCurrentUser({
-                    ...user,
+            console.error("[AuthContext] onAuthStateChanged: Error reloading user:", reloadError.message, "Using user object as is from onAuthStateChanged callback.");
+             if (user) { // Fallback to user object from callback
+                const userToSet = {
                     uid: user.uid,
                     email: user.email,
                     displayName: user.displayName,
                     photoURL: user.photoURL,
-                } as FirebaseUser);
+                    emailVerified: user.emailVerified,
+                    isAnonymous: user.isAnonymous,
+                    metadata: user.metadata,
+                    providerData: user.providerData,
+                    providerId: user.providerId,
+                    refreshToken: user.refreshToken,
+                    tenantId: user.tenantId,
+                    delete: user.delete,
+                    getIdToken: user.getIdToken,
+                    getIdTokenResult: user.getIdTokenResult,
+                    reload: user.reload,
+                    toJSON: user.toJSON,
+                } as FirebaseUser;
+                setCurrentUser(userToSet);
+                console.log("[AuthContext] onAuthStateChanged: setCurrentUser with original user (reload failed). Context displayName:", userToSet.displayName);
             } else {
                 setCurrentUser(null);
+                 console.log("[AuthContext] onAuthStateChanged: original user was null after reload error.");
             }
         }
       } else {
-        console.log("[AuthContext] onAuthStateChanged: User is null.");
+        console.log("[AuthContext] onAuthStateChanged: User is null (logged out or no session).");
         setCurrentUser(null);
       }
       setLoading(false);
@@ -113,22 +138,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await updateProfile(userInstance, { displayName: name });
         console.log("[AuthContext] signUp: updateProfile call completed for UID:", userInstance.uid);
         
-        // After updateProfile, the name is set on Firebase, but userInstance might be stale.
-        // We create a new object for the context with the displayName we just tried to set.
-        const updatedUserForContext = {
-            ...userInstance, // spread existing properties
-            uid: userInstance.uid, // ensure uid is carried over
-            email: userInstance.email, // ensure email is carried over
-            displayName: name, // explicitly use the name from signup
-            photoURL: userInstance.photoURL,
-        };
+        // Force reload to ensure the user object has the latest profile data from Firebase
+        await userInstance.reload();
+        const reloadedUserInstance = auth.currentUser; // Get the reloaded user
+
+        if (!reloadedUserInstance) {
+            console.error("[AuthContext] signUp: CRITICAL - reloadedUserInstance is null after updateProfile and reload.");
+            toast({ variant: "destructive", title: "Sign up incomplete", description: "Profile update confirmation failed." });
+            // Fallback to using 'name' for local context, but this is not ideal
+            const updatedUserForContext = {
+                ...userInstance,
+                uid: userInstance.uid,
+                email: userInstance.email,
+                displayName: name, 
+                photoURL: userInstance.photoURL,
+            }  as FirebaseUser;
+            setCurrentUser(updatedUserForContext);
+            console.log("[AuthContext] signUp: setCurrentUser called (fallback after reload failed). User object displayName:", updatedUserForContext.displayName);
+            router.push('/');
+            return updatedUserForContext;
+        }
         
-        setCurrentUser(updatedUserForContext as FirebaseUser); 
-        console.log("[AuthContext] signUp: setCurrentUser called. User object:", JSON.stringify(updatedUserForContext));
+        const finalUserForContext = {
+            ...reloadedUserInstance,
+            uid: reloadedUserInstance.uid,
+            email: reloadedUserInstance.email,
+            displayName: reloadedUserInstance.displayName, // Should reflect 'name'
+            photoURL: reloadedUserInstance.photoURL,
+        } as FirebaseUser;
+        
+        setCurrentUser(finalUserForContext); 
+        console.log("[AuthContext] signUp: setCurrentUser called. User object displayName:", finalUserForContext.displayName);
         
         toast({ title: "Success", description: "Account created successfully!" });
         router.push('/'); 
-        return updatedUserForContext as FirebaseUser; 
+        return finalUserForContext; 
       }
       console.warn("[AuthContext] signUp: userCredential.user was null after creation.");
       return null; 
@@ -158,36 +202,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
           try {
               await loggedInUser.reload(); 
               const reloadedUser = auth.currentUser; 
-              console.log("[AuthContext] logIn: User reloaded. DisplayName:", reloadedUser?.displayName, "UID:", reloadedUser?.uid);
+              console.log("[AuthContext] logIn: User reloaded. DisplayName:", reloadedUser?.displayName, "Email:", reloadedUser?.email, "UID:", reloadedUser?.uid);
               if (reloadedUser) {
-                setCurrentUser({ 
+                const userToSet = { 
                     ...reloadedUser, 
                     uid: reloadedUser.uid,
                     email: reloadedUser.email,
                     displayName: reloadedUser.displayName,
                     photoURL: reloadedUser.photoURL,
-                } as FirebaseUser);
-                console.log("[AuthContext] logIn: setCurrentUser after reload. User object:", JSON.stringify(reloadedUser));
+                } as FirebaseUser;
+                setCurrentUser(userToSet);
+                console.log("[AuthContext] logIn: setCurrentUser after reload. User object displayName:", userToSet.displayName);
               } else {
                 setCurrentUser(null);
+                console.log("[AuthContext] logIn: reloadedUser was null after reload.");
               }
           } catch (reloadError: any) {
               console.error("[AuthContext] logIn: Error reloading user after login:", reloadError.message);
-              if (loggedInUser) {
-                setCurrentUser({ 
+              if (loggedInUser) { // Fallback to loggedInUser from signIn
+                const userToSet = { 
                     ...loggedInUser,
                     uid: loggedInUser.uid,
                     email: loggedInUser.email,
                     displayName: loggedInUser.displayName,
                     photoURL: loggedInUser.photoURL,
-                 } as FirebaseUser);
-                console.log("[AuthContext] logIn: setCurrentUser with non-reloaded user. User object:", JSON.stringify(loggedInUser));
+                 } as FirebaseUser;
+                setCurrentUser(userToSet);
+                console.log("[AuthContext] logIn: setCurrentUser with non-reloaded user. User object displayName:", userToSet.displayName);
               } else {
                 setCurrentUser(null);
+                 console.log("[AuthContext] logIn: loggedInUser was null after reload error.");
               }
           }
       } else {
           setCurrentUser(null);
+          console.log("[AuthContext] logIn: userCredential.user was null.");
       }
       
       toast({ title: "Success", description: "Logged in successfully!" });
@@ -240,27 +289,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     setLoading(true);
     setError(null);
-    console.log("[AuthContext] updateUserProfile: Attempting to update name to:", name, "for UID:", userToUpdate.uid, "Current displayName:", userToUpdate.displayName);
+    console.log("[AuthContext] updateUserProfile: Attempting to update name to:", name, "for UID:", userToUpdate.uid, "Current Firebase Auth displayName:", userToUpdate.displayName);
     try {
       await updateProfile(userToUpdate, { displayName: name });
       console.log("[AuthContext] updateUserProfile: Firebase Auth profile updated for UID:", userToUpdate.uid);
       
-      // After updateProfile, the name is set on Firebase.
-      // Construct a new user object for the context with the displayName we just tried to set.
-      const updatedUserForContext = { 
-        ...userToUpdate, 
-        uid: userToUpdate.uid,
-        email: userToUpdate.email,
-        displayName: name, 
-        photoURL: userToUpdate.photoURL,
-      };
+      // Force reload to get the latest profile from Firebase server
+      await userToUpdate.reload();
+      const reloadedUser = auth.currentUser; // This should now have the updated name
+
+      if (!reloadedUser) {
+          console.error("[AuthContext] updateUserProfile: CRITICAL - reloadedUser is null after updateProfile and reload.");
+          toast({ variant: "destructive", title: "Profile update error", description: "Failed to confirm profile update." });
+          // Fallback to using 'name' for local context
+           const updatedUserForContextFallback = { 
+            ...userToUpdate, // original userToUpdate object
+            uid: userToUpdate.uid,
+            email: userToUpdate.email,
+            displayName: name, // use the intended new name
+            photoURL: userToUpdate.photoURL,
+          } as FirebaseUser;
+          setCurrentUser(updatedUserForContextFallback);
+          console.log("[AuthContext] updateUserProfile: setCurrentUser called with fallback User object. Context displayName:", updatedUserForContextFallback.displayName);
+          // Still attempt to update trips
+          await updateUserDisplayNameInTrips(userToUpdate.uid, name);
+          return;
+      }
       
-      setCurrentUser(updatedUserForContext as FirebaseUser);
-      console.log("[AuthContext] updateUserProfile: setCurrentUser called with updated User object:", JSON.stringify(updatedUserForContext));
+      const finalUpdatedUserForContext = { 
+        ...reloadedUser, 
+        uid: reloadedUser.uid,
+        email: reloadedUser.email,
+        displayName: reloadedUser.displayName, // This should be the new name from Firebase
+        photoURL: reloadedUser.photoURL,
+      } as FirebaseUser;
+      
+      setCurrentUser(finalUpdatedUserForContext);
+      console.log("[AuthContext] updateUserProfile: setCurrentUser called with reloaded User object. Context displayName:", finalUpdatedUserForContext.displayName);
 
       // Now, update the display name in all trips the user is part of
-      await updateUserDisplayNameInTrips(userToUpdate.uid, name);
-      console.log("[AuthContext] updateUserProfile: Called updateUserDisplayNameInTrips for UID:", userToUpdate.uid, "with name:", name);
+      // Pass the confirmed displayName from the reloadedUser object
+      if (finalUpdatedUserForContext.displayName) {
+        await updateUserDisplayNameInTrips(finalUpdatedUserForContext.uid, finalUpdatedUserForContext.displayName);
+        console.log("[AuthContext] updateUserProfile: Called updateUserDisplayNameInTrips for UID:", finalUpdatedUserForContext.uid, "with name:", finalUpdatedUserForContext.displayName);
+      } else {
+        console.warn("[AuthContext] updateUserProfile: reloadedUser.displayName was null/empty after update and reload. Trip names might not update correctly for UID:", finalUpdatedUserForContext.uid);
+         // Fallback to using the 'name' variable if reloadedUser.displayName is unexpectedly null
+        await updateUserDisplayNameInTrips(finalUpdatedUserForContext.uid, name);
+        console.log("[AuthContext] updateUserProfile: Called updateUserDisplayNameInTrips (fallback name) for UID:", finalUpdatedUserForContext.uid, "with name:", name);
+      }
+
 
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
