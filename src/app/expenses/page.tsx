@@ -92,12 +92,12 @@ export default function ExpensesPage() {
     }
     
     const initialExpenses: Expense[] = [
-        { id: '1', description: 'Group Dinner', amount: 120, currency: 'USD', category: 'Food', paidByUserId: currentUser?.uid || 'user1', date: '2024-07-20', participantIds: [currentUser?.uid || 'user1', 'user2', 'user3'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
-        { id: '2', description: 'Museum Tickets', amount: 45, currency: 'USD', category: 'Activities', paidByUserId: 'user2', date: '2024-07-21', participantIds: [currentUser?.uid || 'user1', 'user2'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
-        { id: '3', description: 'Souvenirs', amount: 60, currency: 'EUR', category: 'Shopping', paidByUserId: 'user3', date: '2024-07-22', participantIds: ['user3', currentUser?.uid || 'user1'], tripId: userTrips.length > 1 ? userTrips[1].id : 'trip2' },
+        // { id: '1', description: 'Group Dinner', amount: 120, currency: 'USD', category: 'Food', paidByUserId: currentUser?.uid || 'user1', date: '2024-07-20', participantIds: [currentUser?.uid || 'user1', 'user2', 'user3'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
+        // { id: '2', description: 'Museum Tickets', amount: 45, currency: 'USD', category: 'Activities', paidByUserId: 'user2', date: '2024-07-21', participantIds: [currentUser?.uid || 'user1', 'user2'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
+        // { id: '3', description: 'Souvenirs', amount: 60, currency: 'EUR', category: 'Shopping', paidByUserId: 'user3', date: '2024-07-22', participantIds: ['user3', currentUser?.uid || 'user1'], tripId: userTrips.length > 1 ? userTrips[1].id : 'trip2' },
     ];
-    setAllExpenses(initialExpenses);
-  }, [currentUser, userTrips]);
+    setAllExpenses(initialExpenses); // Start with no mock expenses for truly empty state
+  }, [currentUser]); // Removed userTrips dependency to avoid re-populating mock data on trip changes
 
   // Filter expenses whenever selectedTripId or allExpenses change
   useEffect(() => {
@@ -125,18 +125,22 @@ export default function ExpensesPage() {
 
 
   const calculateBalancesAndTotal = useCallback(() => {
-    const activeUsers = usersInCurrentTrip; // Users relevant to the selected trip
+    const activeUsers = usersInCurrentTrip;
     const expensesToProcess = filteredExpenses;
 
-    if (activeUsers.length === 0 || (expensesToProcess.length === 0 && !selectedTripId)) {
+    // If no trip is selected, or if a selected trip has no active users, 
+    // or if a selected trip has no expenses, then the balances section should be "empty" (show placeholder).
+    if (!selectedTripId || activeUsers.length === 0 || (selectedTripId && expensesToProcess.length === 0)) {
       setBalances([]);
       setTotalGroupExpense(0);
       return;
     }
-     if (expensesToProcess.length === 0 && selectedTripId) {
-      setBalances([]); 
-      setTotalGroupExpense(0);
-    }
+
+    // If we reach here, it means:
+    // 1. A trip IS selected (selectedTripId is not null)
+    // 2. The selected trip HAS active users (activeUsers.length > 0)
+    // 3. The selected trip HAS expenses (expensesToProcess.length > 0)
+    // So, proceed with the full calculation.
 
     let newTotalGroupExpense = 0;
     const userExpensesSummary: { [userId: string]: { paid: number; share: number } } = {};
@@ -181,7 +185,7 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     calculateBalancesAndTotal();
-  }, [calculateBalancesAndTotal]); // calculateBalancesAndTotal has usersInCurrentTrip in its deps
+  }, [calculateBalancesAndTotal]); 
 
   useEffect(() => {
     if (tripBudget !== null && totalGroupExpense > tripBudget && selectedTripId) {
@@ -227,7 +231,7 @@ export default function ExpensesPage() {
     const expenseWithTripId = { ...currentExpense, tripId: selectedTripId } as Expense;
 
     if (editingExpenseId) {
-      setAllExpenses(allExpenses.map(exp => exp.id === editingExpenseId ? expenseWithTripId : exp));
+      setAllExpenses(allExpenses.map(exp => exp.id === editingExpenseId ? {...expenseWithTripId, id: editingExpenseId } : exp));
       toast({ title: "Success", description: "Expense updated." });
     } else {
       setAllExpenses([...allExpenses, { ...expenseWithTripId, id: Date.now().toString() }]);
@@ -427,7 +431,6 @@ export default function ExpensesPage() {
                  </div>
               </div>
             </div>
-            {/* Removed Split Logic Card */}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsExpenseDialogOpen(false)}>Cancel</Button>
