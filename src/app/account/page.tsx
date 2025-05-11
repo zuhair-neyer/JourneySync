@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, UserCog, ShieldKeyhole } from 'lucide-react';
+import { Loader2, UserCog, Shield } from 'lucide-react'; // Changed ShieldKeyhole to Shield
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -124,7 +124,7 @@ export default function AccountPage() {
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-xl flex items-center"><ShieldKeyhole className="mr-2 h-6 w-6" /> Change Password</CardTitle>
+          <CardTitle className="text-xl flex items-center"><Shield className="mr-2 h-6 w-6" /> Change Password</CardTitle> {/* Changed ShieldKeyhole to Shield */}
           <CardDescription>Update your account password. Make sure it's strong and unique.</CardDescription>
         </CardHeader>
         <CardContent>
