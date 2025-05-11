@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ReactNode, Dispatch, SetStateAction } from 'react';
@@ -14,7 +15,7 @@ import {
   browserSessionPersistence,
   updateProfile,
   updatePassword as firebaseUpdatePassword,
-  sendEmailVerification // Import sendEmailVerification
+  sendEmailVerification
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
@@ -30,7 +31,7 @@ interface AuthContextType {
   logOut: () => Promise<void>;
   updateUserProfile: (name: string) => Promise<void>;
   updateUserPassword: (newPassword: string) => Promise<void>;
-  resendVerificationEmail: () => Promise<void>; // Added resend function
+  resendVerificationEmail: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -83,6 +84,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 } as FirebaseUser;
                 setCurrentUser(userToSet);
                 console.log("[AuthContext] onAuthStateChanged: setCurrentUser with reloaded user. Context displayName:", userToSet.displayName, "Email Verified:", userToSet.emailVerified);
+                 // If user session exists but email is not verified, show a persistent toast.
+                // This is for users who might have closed the tab after signup without verifying.
+                if (!reloadedUser.emailVerified) {
+                  toast({ 
+                      variant: "default", 
+                      title: "Verify Your Email", 
+                      description: "Your email address is not verified. Please check your inbox or resend the verification email from your account page.",
+                      duration: 900000 // Long duration or make it non-dismissible if possible
+                  });
+                }
             } else {
                 setCurrentUser(null);
                  console.log("[AuthContext] onAuthStateChanged: reloadedUser was null after reload.");
@@ -110,6 +121,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 } as FirebaseUser;
                 setCurrentUser(userToSet);
                 console.log("[AuthContext] onAuthStateChanged: setCurrentUser with original user (reload failed). Context displayName:", userToSet.displayName, "Email Verified:", userToSet.emailVerified);
+                 if (!userToSet.emailVerified) {
+                  toast({ 
+                      variant: "default", 
+                      title: "Verify Your Email", 
+                      description: "Your email address is not verified. Please check your inbox or resend the verification email from your account page.",
+                      duration: 900000
+                  });
+                }
             } else {
                 setCurrentUser(null);
                  console.log("[AuthContext] onAuthStateChanged: original user was null after reload error.");
@@ -122,7 +141,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false);
     });
     return unsubscribe; 
-  }, []);
+  }, [toast]); // Added toast to dependency array
 
   const signUp = async (email: string, password: string, name: string): Promise<FirebaseUser | null> => {
     setLoading(true);
@@ -146,45 +165,78 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (!reloadedUserInstance) {
             console.error("[AuthContext] signUp: CRITICAL - reloadedUserInstance is null after updateProfile and reload.");
             toast({ variant: "destructive", title: "Sign up incomplete", description: "Profile update confirmation failed." });
+            // Manually construct a user object for context if reload fails but name was intended to be set.
             const updatedUserForContext = {
-                ...userInstance,
-                uid: userInstance.uid,
-                email: userInstance.email,
-                displayName: name, 
+                ...userInstance, // Spreading the original user instance
+                uid: userInstance.uid, // Explicitly ensure uid is present
+                email: userInstance.email, // Explicitly ensure email is present
+                displayName: name, // Use the intended name
                 photoURL: userInstance.photoURL,
                 emailVerified: userInstance.emailVerified,
+                 // Add other required properties from FirebaseUser type if missing from spread
+                isAnonymous: userInstance.isAnonymous,
+                metadata: userInstance.metadata,
+                providerData: userInstance.providerData,
+                providerId: userInstance.providerId,
+                refreshToken: userInstance.refreshToken,
+                tenantId: userInstance.tenantId,
+                delete: () => userInstance.delete(),
+                getIdToken: (forceRefresh?: boolean) => userInstance.getIdToken(forceRefresh),
+                getIdTokenResult: (forceRefresh?: boolean) => userInstance.getIdTokenResult(forceRefresh),
+                reload: () => userInstance.reload(),
+                toJSON: () => userInstance.toJSON(),
             }  as FirebaseUser;
             setCurrentUser(updatedUserForContext);
             console.log("[AuthContext] signUp: setCurrentUser called (fallback after reload failed). User object displayName:", updatedUserForContext.displayName);
-            router.push('/');
-            return updatedUserForContext;
+            // Don't redirect immediately, let them verify email first.
+            // router.push('/'); // Commented out to wait for verification
+            // return updatedUserForContext; // Return the constructed user
+        } else {
+            const finalUserForContext = {
+                ...reloadedUserInstance,
+                uid: reloadedUserInstance.uid,
+                email: reloadedUserInstance.email,
+                displayName: reloadedUserInstance.displayName, 
+                photoURL: reloadedUserInstance.photoURL,
+                emailVerified: reloadedUserInstance.emailVerified,
+                 isAnonymous: reloadedUserInstance.isAnonymous,
+                metadata: reloadedUserInstance.metadata,
+                providerData: reloadedUserInstance.providerData,
+                providerId: reloadedUserInstance.providerId,
+                refreshToken: reloadedUserInstance.refreshToken,
+                tenantId: reloadedUserInstance.tenantId,
+                delete: () => reloadedUserInstance.delete(),
+                getIdToken: (forceRefresh?: boolean) => reloadedUserInstance.getIdToken(forceRefresh),
+                getIdTokenResult: (forceRefresh?: boolean) => reloadedUserInstance.getIdTokenResult(forceRefresh),
+                reload: () => reloadedUserInstance.reload(),
+                toJSON: () => reloadedUserInstance.toJSON(),
+            } as FirebaseUser;
+            
+            setCurrentUser(finalUserForContext); 
+            console.log("[AuthContext] signUp: setCurrentUser called. User object displayName:", finalUserForContext.displayName, "Email Verified:", finalUserForContext.emailVerified);
         }
         
-        const finalUserForContext = {
-            ...reloadedUserInstance,
-            uid: reloadedUserInstance.uid,
-            email: reloadedUserInstance.email,
-            displayName: reloadedUserInstance.displayName, 
-            photoURL: reloadedUserInstance.photoURL,
-            emailVerified: reloadedUserInstance.emailVerified,
-        } as FirebaseUser;
-        
-        setCurrentUser(finalUserForContext); 
-        console.log("[AuthContext] signUp: setCurrentUser called. User object displayName:", finalUserForContext.displayName, "Email Verified:", finalUserForContext.emailVerified);
-
-        // Send verification email
+        // Send verification email using the latest user instance (reloaded if successful)
+        const userToVerify = reloadedUserInstance || userInstance;
         try {
-          await sendEmailVerification(reloadedUserInstance);
-          toast({ title: "Verification Email Sent", description: "Please check your email to verify your account." });
-          console.log("[AuthContext] signUp: Verification email sent to:", reloadedUserInstance.email);
+          await sendEmailVerification(userToVerify);
+          toast({ title: "Verification Email Sent", description: "Please check your email to verify your account. You can then log in." });
+          console.log("[AuthContext] signUp: Verification email sent to:", userToVerify.email);
         } catch (verificationError: any) {
           console.error("[AuthContext] signUp: Error sending verification email:", verificationError);
-          toast({ variant: "destructive", title: "Verification Email Failed", description: "Could not send verification email. You can try resending from your account page." });
+          toast({ variant: "destructive", title: "Verification Email Failed", description: "Could not send verification email. You can try resending from your account page after logging in (if allowed)." });
         }
         
-        toast({ title: "Success", description: "Account created successfully! Please verify your email." });
-        router.push('/'); 
-        return finalUserForContext; 
+        // Do not automatically log in or redirect. User needs to verify first.
+        // toast({ title: "Success", description: "Account created successfully! Please verify your email to log in." });
+        // router.push('/login'); // Redirect to login so they can log in AFTER verification.
+        // Ensure user is signed out after signup until email is verified
+        await firebaseSignOut(auth);
+        setCurrentUser(null);
+        console.log("[AuthContext] signUp: User signed out after signup, pending email verification.");
+        router.push('/login'); // Send to login page with a message to verify.
+        
+        return reloadedUserInstance || userInstance; 
       }
       console.warn("[AuthContext] signUp: userCredential.user was null after creation.");
       return null; 
@@ -211,70 +263,64 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       const loggedInUser = userCredential.user;
       if (loggedInUser) {
-          try {
-              await loggedInUser.reload(); 
-              const reloadedUser = auth.currentUser; 
-              console.log("[AuthContext] logIn: User reloaded. DisplayName:", reloadedUser?.displayName, "Email:", reloadedUser?.email, "UID:", reloadedUser?.uid, "Email Verified:", reloadedUser?.emailVerified);
-              if (reloadedUser) {
-                const userToSet = { 
-                    ...reloadedUser, 
-                    uid: reloadedUser.uid,
-                    email: reloadedUser.email,
-                    displayName: reloadedUser.displayName,
-                    photoURL: reloadedUser.photoURL,
-                    emailVerified: reloadedUser.emailVerified,
-                } as FirebaseUser;
-                setCurrentUser(userToSet);
-                console.log("[AuthContext] logIn: setCurrentUser after reload. User object displayName:", userToSet.displayName, "Email Verified:", userToSet.emailVerified);
+          await loggedInUser.reload(); 
+          const reloadedUser = auth.currentUser; 
+          console.log("[AuthContext] logIn: User reloaded. DisplayName:", reloadedUser?.displayName, "Email:", reloadedUser?.email, "UID:", reloadedUser?.uid, "Email Verified:", reloadedUser?.emailVerified);
 
-                if (!reloadedUser.emailVerified) {
-                  toast({ 
-                      variant: "default", 
-                      title: "Verify Your Email", 
-                      description: "Your email address is not verified. Please check your inbox or resend the verification email from your account page.",
-                      duration: 9000 
-                  });
-                  console.log("[AuthContext] logIn: User logged in but email not verified:", reloadedUser.email);
-                }
-
-              } else {
-                setCurrentUser(null);
-                console.log("[AuthContext] logIn: reloadedUser was null after reload.");
-              }
-          } catch (reloadError: any) {
-              console.error("[AuthContext] logIn: Error reloading user after login:", reloadError.message);
-              if (loggedInUser) { 
-                const userToSet = { 
-                    ...loggedInUser,
-                    uid: loggedInUser.uid,
-                    email: loggedInUser.email,
-                    displayName: loggedInUser.displayName,
-                    photoURL: loggedInUser.photoURL,
-                    emailVerified: loggedInUser.emailVerified,
-                 } as FirebaseUser;
-                setCurrentUser(userToSet);
-                console.log("[AuthContext] logIn: setCurrentUser with non-reloaded user. User object displayName:", userToSet.displayName, "Email Verified:", userToSet.emailVerified);
-                if (!loggedInUser.emailVerified) {
-                  toast({ 
-                      variant: "default", 
-                      title: "Verify Your Email", 
-                      description: "Your email address is not verified. Please check your inbox or resend the verification email from your account page.",
-                      duration: 9000
-                  });
-                }
-              } else {
-                setCurrentUser(null);
-                 console.log("[AuthContext] logIn: loggedInUser was null after reload error.");
-              }
+          if (reloadedUser && !reloadedUser.emailVerified) {
+            console.log("[AuthContext] logIn: Email not verified for:", reloadedUser.email);
+            setError("Email not verified. Please check your inbox or resend the verification email.");
+            toast({ 
+                variant: "destructive", 
+                title: "Email Not Verified", 
+                description: "Please verify your email address before logging in. Check your inbox or resend from the account page (if you signed up previously).",
+                duration: 9000 
+            });
+            await firebaseSignOut(auth); // Sign out the user
+            setCurrentUser(null);
+            return null; // Prevent login
+          }
+          
+          if (reloadedUser) {
+            const userToSet = { 
+                ...reloadedUser, 
+                uid: reloadedUser.uid,
+                email: reloadedUser.email,
+                displayName: reloadedUser.displayName,
+                photoURL: reloadedUser.photoURL,
+                emailVerified: reloadedUser.emailVerified,
+                 isAnonymous: reloadedUser.isAnonymous,
+                metadata: reloadedUser.metadata,
+                providerData: reloadedUser.providerData,
+                providerId: reloadedUser.providerId,
+                refreshToken: reloadedUser.refreshToken,
+                tenantId: reloadedUser.tenantId,
+                delete: () => reloadedUser.delete(),
+                getIdToken: (forceRefresh?: boolean) => reloadedUser.getIdToken(forceRefresh),
+                getIdTokenResult: (forceRefresh?: boolean) => reloadedUser.getIdTokenResult(forceRefresh),
+                reload: () => reloadedUser.reload(),
+                toJSON: () => reloadedUser.toJSON(),
+            } as FirebaseUser;
+            setCurrentUser(userToSet);
+            console.log("[AuthContext] logIn: setCurrentUser after reload. User object displayName:", userToSet.displayName, "Email Verified:", userToSet.emailVerified);
+            toast({ title: "Success", description: "Logged in successfully!" });
+            router.push('/'); 
+            return reloadedUser;
+          } else {
+            // This case should ideally not be reached if reloadedUser was checked for email verification first
+            setCurrentUser(null);
+            setError("Failed to load user data after login.");
+            toast({variant: "destructive", title: "Login Error", description: "Could not retrieve user details after login."});
+            console.log("[AuthContext] logIn: reloadedUser was null after reload (and email verification check).");
+            return null;
           }
       } else {
           setCurrentUser(null);
+          setError("Login failed: No user data received.");
+          toast({variant: "destructive", title: "Login Error", description: "No user data received upon login."});
           console.log("[AuthContext] logIn: userCredential.user was null.");
+          return null;
       }
-      
-      toast({ title: "Success", description: "Logged in successfully!" });
-      router.push('/'); 
-      return auth.currentUser; 
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
@@ -340,6 +386,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
             displayName: name, 
             photoURL: userToUpdate.photoURL,
             emailVerified: userToUpdate.emailVerified,
+            isAnonymous: userToUpdate.isAnonymous,
+            metadata: userToUpdate.metadata,
+            providerData: userToUpdate.providerData,
+            providerId: userToUpdate.providerId,
+            refreshToken: userToUpdate.refreshToken,
+            tenantId: userToUpdate.tenantId,
+            delete: () => userToUpdate.delete(),
+            getIdToken: (forceRefresh?: boolean) => userToUpdate.getIdToken(forceRefresh),
+            getIdTokenResult: (forceRefresh?: boolean) => userToUpdate.getIdTokenResult(forceRefresh),
+            reload: () => userToUpdate.reload(),
+            toJSON: () => userToUpdate.toJSON(),
           } as FirebaseUser;
           setCurrentUser(updatedUserForContextFallback);
           console.log("[AuthContext] updateUserProfile: setCurrentUser called with fallback User object. Context displayName:", updatedUserForContextFallback.displayName);
@@ -354,6 +411,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         displayName: reloadedUser.displayName, 
         photoURL: reloadedUser.photoURL,
         emailVerified: reloadedUser.emailVerified,
+         isAnonymous: reloadedUser.isAnonymous,
+        metadata: reloadedUser.metadata,
+        providerData: reloadedUser.providerData,
+        providerId: reloadedUser.providerId,
+        refreshToken: reloadedUser.refreshToken,
+        tenantId: reloadedUser.tenantId,
+        delete: () => reloadedUser.delete(),
+        getIdToken: (forceRefresh?: boolean) => reloadedUser.getIdToken(forceRefresh),
+        getIdTokenResult: (forceRefresh?: boolean) => reloadedUser.getIdTokenResult(forceRefresh),
+        reload: () => reloadedUser.reload(),
+        toJSON: () => reloadedUser.toJSON(),
       } as FirebaseUser;
       
       setCurrentUser(finalUpdatedUserForContext);
@@ -364,7 +432,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log("[AuthContext] updateUserProfile: Called updateUserDisplayNameInTrips for UID:", finalUpdatedUserForContext.uid, "with name:", finalUpdatedUserForContext.displayName);
       } else {
         console.warn("[AuthContext] updateUserProfile: reloadedUser.displayName was null/empty after update and reload. Trip names might not update correctly for UID:", finalUpdatedUserForContext.uid);
-        await updateUserDisplayNameInTrips(finalUpdatedUserForContext.uid, name);
+        await updateUserDisplayNameInTrips(finalUpdatedUserForContext.uid, name); // Fallback to intended name if reloaded one is empty
         console.log("[AuthContext] updateUserProfile: Called updateUserDisplayNameInTrips (fallback name) for UID:", finalUpdatedUserForContext.uid, "with name:", name);
       }
 
@@ -405,21 +473,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const resendVerificationEmail = async () => {
-    if (!currentUser) {
-      toast({ variant: "destructive", title: "Error", description: "You must be logged in." });
+    // Allow resending even if currentUser is briefly null (e.g. after signup logs them out)
+    const userToVerify = auth.currentUser || currentUser; 
+
+    if (!userToVerify) {
+      toast({ variant: "destructive", title: "Error", description: "No user session found to resend verification for. Please try logging in." });
       return;
     }
-    if (currentUser.emailVerified) {
+    if (userToVerify.emailVerified) {
       toast({ title: "Already Verified", description: "Your email is already verified." });
       return;
     }
     setLoading(true);
     setError(null);
-    console.log("[AuthContext] resendVerificationEmail: Attempting for user:", currentUser.email);
+    console.log("[AuthContext] resendVerificationEmail: Attempting for user:", userToVerify.email);
     try {
-      await sendEmailVerification(currentUser);
+      await sendEmailVerification(userToVerify);
       toast({ title: "Verification Email Sent", description: "Please check your email to verify your account." });
-      console.log("[AuthContext] resendVerificationEmail: Sent to:", currentUser.email);
+      console.log("[AuthContext] resendVerificationEmail: Sent to:", userToVerify.email);
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
