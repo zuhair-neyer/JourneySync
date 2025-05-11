@@ -21,17 +21,19 @@ export function AuthStatus() {
   }
 
   if (currentUser) {
+    const displayName = currentUser.displayName || currentUser.email;
+    const fallbackInitial = displayName ? displayName[0].toUpperCase() : <UserCircle size={16}/>;
+
     return (
       <div className="flex flex-col items-start space-y-2 p-2">
         <div className="flex items-center gap-2 text-sm text-sidebar-foreground">
           <Avatar className="h-8 w-8">
-            {/* Add AvatarImage if you store user photoURL */}
-            {/* <AvatarImage src={currentUser.photoURL || undefined} alt={currentUser.displayName || currentUser.email || 'User'} /> */}
+            {currentUser.photoURL && <AvatarImage src={currentUser.photoURL} alt={displayName || 'User'} />}
             <AvatarFallback>
-              {currentUser.email ? currentUser.email[0].toUpperCase() : <UserCircle size={16}/>}
+              {fallbackInitial}
             </AvatarFallback>
           </Avatar>
-          <span className="truncate" title={currentUser.email || undefined}>{currentUser.email}</span>
+          <span className="truncate" title={displayName || undefined}>{displayName}</span>
         </div>
         <Button
           variant="ghost"
@@ -70,3 +72,4 @@ export function AuthStatus() {
     </div>
   );
 }
+

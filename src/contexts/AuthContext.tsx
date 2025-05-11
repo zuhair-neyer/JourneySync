@@ -12,7 +12,8 @@ import {
   onAuthStateChanged,
   setPersistence,
   browserLocalPersistence,
-  browserSessionPersistence
+  browserSessionPersistence,
+  updateProfile
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
@@ -22,7 +23,7 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   setError: Dispatch<SetStateAction<string | null>>;
-  signUp: (email: string, password: string) => Promise<FirebaseUser | null>;
+  signUp: (email: string, password: string, name: string) => Promise<FirebaseUser | null>;
   logIn: (email: string, password: string, rememberMe?: boolean) => Promise<FirebaseUser | null>;
   logOut: () => Promise<void>;
 }
@@ -56,14 +57,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return unsubscribe; // Cleanup subscription on unmount
   }, []);
 
-  const signUp = async (email: string, password: string): Promise<FirebaseUser | null> => {
+  const signUp = async (email: string, password: string, name: string): Promise<FirebaseUser | null> => {
     setLoading(true);
     setError(null);
     try {
       // For sign-up, typically local persistence is desired for a good UX.
       await setPersistence(auth, browserLocalPersistence);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      setCurrentUser(userCredential.user);
+      
+      // Update profile with display name
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: name,
+        });
+        // Manually update the currentUser state as onAuthStateChanged might not fire immediately with profile updates
+        setCurrentUser({ ...userCredential.user, displayName: name }); 
+      }
+      
       toast({ title: "Success", description: "Account created successfully!" });
       router.push('/'); // Redirect to dashboard after sign up
       return userCredential.user;
@@ -127,3 +137,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
