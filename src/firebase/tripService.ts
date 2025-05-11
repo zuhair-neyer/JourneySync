@@ -1,7 +1,7 @@
 
 'use server';
 import { database } from '@/firebase/config';
-import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption } from '@/types';
+import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem } from '@/types';
 import { ref, push, set, get, child, update, serverTimestamp, remove } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
@@ -69,7 +69,8 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
         },
       },
       expenses: {},
-      polls: {}, // Initialize polls
+      polls: {}, 
+      itinerary: {}, // Initialize itinerary
     };
     await set(newTripRef, newTripData);
 
@@ -230,6 +231,7 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         createdBy: tripData.createdBy,
         expenses: tripData.expenses || {}, 
         polls: tripData.polls || {},
+        itinerary: tripData.itinerary || {},
       } as Trip;
 
       if (tripData.createdBy && !processedMembers[tripData.createdBy]) {
@@ -458,16 +460,13 @@ export async function updatePollInTripDb(tripId: string, pollId: string, pollDat
     return false;
   }
   try {
-    // Ensure options are handled correctly: Firebase might not like undefined values in arrays.
-    // If `pollData.options` is provided, we assume it's the complete new array of options.
     const updates: { [key: string]: any } = {};
     if (pollData.question !== undefined) updates[`trips/${tripId}/polls/${pollId}/question`] = pollData.question;
     if (pollData.options !== undefined) updates[`trips/${tripId}/polls/${pollId}/options`] = pollData.options;
-    // Do not update createdBy or createdAt
     
     if (Object.keys(updates).length === 0) {
         console.warn("[tripService] updatePollInTripDb: No valid fields to update provided.");
-        return true; // No changes needed, considered a success.
+        return true; 
     }
 
     await update(ref(database), updates);
@@ -493,6 +492,100 @@ export async function deletePollFromTripDb(tripId: string, pollId: string): Prom
   }
 }
 
+// Itinerary related functions
+export async function addItineraryItemToTripDb(tripId: string, itemData: Omit<ItineraryItem, 'id' | 'tripId'>): Promise<string | null> {
+  if (!tripId) {
+    console.error("[tripService] addItineraryItemToTripDb: Trip ID is required.");
+    return null;
+  }
+  try {
+    const itineraryRef = ref(database, `trips/${tripId}/itinerary`);
+    const newItemRef = push(itineraryRef);
+    const itemId = newItemRef.key;
+
+    if (!itemId) {
+      console.error("[tripService] addItineraryItemToTripDb: Failed to generate itinerary item ID.");
+      return null;
+    }
+    const itemToAdd: Omit<ItineraryItem, 'tripId'> = { ...itemData, id: itemId };
+    await set(newItemRef, itemToAdd);
+    return itemId;
+  } catch (error: any) {
+    console.error(`[tripService] addItineraryItemToTripDb: Error adding itinerary item to trip ${tripId}:`, error.message);
+    return null;
+  }
+}
+
+export async function getItineraryItemsForTripFromDb(tripId: string): Promise<ItineraryItem[]> {
+  if (!tripId) {
+    return [];
+  }
+  try {
+    const itineraryRef = ref(database, `trips/${tripId}/itinerary`);
+    const snapshot = await get(itineraryRef);
+    if (snapshot.exists()) {
+      const itemsData = snapshot.val();
+      const itemsArray: ItineraryItem[] = Object.keys(itemsData).map(itemId => ({
+        ...itemsData[itemId],
+        id: itemId,
+        tripId: tripId,
+      }));
+      return itemsArray;
+    }
+    return [];
+  } catch (error: any) {
+    console.error(`[tripService] getItineraryItemsForTripFromDb: Error fetching itinerary items for trip ${tripId}:`, error.message);
+    return [];
+  }
+}
+
+export async function updateItineraryItemInTripDb(tripId: string, itemId: string, itemData: Partial<Omit<ItineraryItem, 'id' | 'tripId'>>): Promise<boolean> {
+  if (!tripId || !itemId) {
+    console.error("[tripService] updateItineraryItemInTripDb: Trip ID and Item ID are required.");
+    return false;
+  }
+  try {
+    // Construct specific paths for updates to avoid overwriting entire object if only partial data is sent
+    const updates: { [key: string]: any } = {};
+    const basePath = `trips/${tripId}/itinerary/${itemId}`;
+
+    if (itemData.title !== undefined) updates[`${basePath}/title`] = itemData.title;
+    if (itemData.description !== undefined) updates[`${basePath}/description`] = itemData.description;
+    if (itemData.location !== undefined) updates[`${basePath}/location`] = itemData.location;
+    if (itemData.date !== undefined) updates[`${basePath}/date`] = itemData.date;
+    if (itemData.time !== undefined) updates[`${basePath}/time`] = itemData.time;
+    if (itemData.notes !== undefined) updates[`${basePath}/notes`] = itemData.notes;
+    // createdBy and createdAt should generally not be updated after creation
+    // votes and comments can be handled if they become part of Firebase structure
+
+    if (Object.keys(updates).length === 0) {
+        console.warn("[tripService] updateItineraryItemInTripDb: No valid fields to update provided.");
+        return true; // No changes needed
+    }
+    
+    await update(ref(database), updates);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] updateItineraryItemInTripDb: Error updating item ${itemId} in trip ${tripId}:`, error.message);
+    return false;
+  }
+}
+
+export async function deleteItineraryItemFromDb(tripId: string, itemId: string): Promise<boolean> {
+  if (!tripId || !itemId) {
+    console.error("[tripService] deleteItineraryItemFromDb: Trip ID and Item ID are required.");
+    return false;
+  }
+  try {
+    const itemRef = ref(database, `trips/${tripId}/itinerary/${itemId}`);
+    await remove(itemRef);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] deleteItineraryItemFromDb: Error deleting item ${itemId} from trip ${tripId}:`, error.message);
+    return false;
+  }
+}
+
 
 export async function deleteUserDataFromDb(userId: string): Promise<void> {
   console.log(`[tripService] deleteUserDataFromDb: Attempting to delete data for user ID: ${userId}`);
@@ -511,7 +604,7 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
       const tripIds = Object.keys(userTripsData);
 
       // 2. For each trip, remove the user from the trip's members list
-      // Also, remove polls created by this user from those trips
+      // Also, remove polls and itinerary items created by this user from those trips
       for (const tripId of tripIds) {
         updates[`/trips/${tripId}/members/${userId}`] = null; // Mark for deletion
 
@@ -522,6 +615,16 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
             for (const pollId in polls) {
                 if (polls[pollId].createdBy === userId) {
                     updates[`/trips/${tripId}/polls/${pollId}`] = null;
+                }
+            }
+        }
+        // Remove itinerary items created by the user in this trip
+        const tripItinerarySnapshot = await get(ref(database, `trips/${tripId}/itinerary`));
+        if (tripItinerarySnapshot.exists()) {
+            const itineraryItems = tripItinerarySnapshot.val();
+            for (const itemId in itineraryItems) {
+                if (itineraryItems[itemId].createdBy === userId) {
+                    updates[`/trips/${tripId}/itinerary/${itemId}`] = null;
                 }
             }
         }
@@ -546,4 +649,3 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
     }
   }
 }
-

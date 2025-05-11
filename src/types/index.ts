@@ -22,6 +22,22 @@ export interface Poll {
   // userVote?: string; // This will be managed client-side in PollsPage for UI purposes
 }
 
+export interface ItineraryItem {
+  id: string;
+  tripId: string; // ID of the trip this item belongs to
+  title: string;
+  description: string;
+  location: string;
+  date: string;
+  time: string;
+  notes?: string;
+  createdBy: string; // UID of the user who created the item
+  createdAt: number; // Timestamp of creation
+  // For collaborative features - can be expanded later
+  votes?: number; 
+  comments?: string[];
+}
+
 export interface Trip {
   id: string;
   name:string;
@@ -33,8 +49,11 @@ export interface Trip {
   expenses?: { 
     [expenseId: string]: Expense;
   };
-  polls?: { // Polls are now part of a trip
-    [pollId: string]: Omit<Poll, 'id' | 'tripId'>; // Store poll data directly under trip
+  polls?: { 
+    [pollId: string]: Omit<Poll, 'id' | 'tripId'>; 
+  };
+  itinerary?: {
+    [itemId: string]: Omit<ItineraryItem, 'id' | 'tripId'>;
   };
 }
 
@@ -55,4 +74,3 @@ export interface Expense {
   participantIds: string[];
   tripId: string; 
 }
-
