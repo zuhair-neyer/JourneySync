@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -61,7 +61,8 @@ export default function ExpensesPage() {
   const { userTrips, selectedTripId, setSelectedTripId, isLoadingUserTrips, selectedTrip } = useTripContext();
   const { toast } = useToast();
   
-  const [users, setUsers] = useState<User[]>([]);
+  // Global users list (could be fetched or include more details from a user service)
+  const [users, setUsers] = useState<User[]>([]); 
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]); // Stores all expenses across trips
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]); // Expenses for the selected trip
   
@@ -76,7 +77,7 @@ export default function ExpensesPage() {
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
   const [budgetInput, setBudgetInput] = useState<string>("");
 
-  // Initialize users and mock expenses
+  // Initialize global users list (e.g. with current user and any known associates/mock data)
   useEffect(() => {
     const mockUsers: User[] = [
       { id: 'user2', name: 'Alice Wonderland' },
@@ -85,66 +86,85 @@ export default function ExpensesPage() {
     if (currentUser) {
       setUsers([{ id: currentUser.uid, name: currentUser.displayName || currentUser.email || 'Current User', email: currentUser.email }, ...mockUsers]);
     } else {
-      // Fallback for when currentUser is not yet loaded or available
       setUsers([{ id: 'user1', name: 'Guest User (You)'}, ...mockUsers]);
     }
     
     const initialExpenses: Expense[] = [
         { id: '1', description: 'Group Dinner', amount: 120, currency: 'USD', category: 'Food', paidByUserId: currentUser?.uid || 'user1', date: '2024-07-20', participantIds: [currentUser?.uid || 'user1', 'user2', 'user3'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
         { id: '2', description: 'Museum Tickets', amount: 45, currency: 'USD', category: 'Activities', paidByUserId: 'user2', date: '2024-07-21', participantIds: [currentUser?.uid || 'user1', 'user2'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
-        { id: '3', description: 'Souvenirs', amount: 60, currency: 'EUR', category: 'Shopping', paidByUserId: 'user3', date: '2024-07-22', participantIds: ['user3', currentUser?.uid || 'user1'], tripId: userTrips.length > 1 ? userTrips[1].id : 'trip2' }, // Example for a second trip
+        { id: '3', description: 'Souvenirs', amount: 60, currency: 'EUR', category: 'Shopping', paidByUserId: 'user3', date: '2024-07-22', participantIds: ['user3', currentUser?.uid || 'user1'], tripId: userTrips.length > 1 ? userTrips[1].id : 'trip2' },
     ];
     setAllExpenses(initialExpenses);
-  }, [currentUser, userTrips]); // Added userTrips dependency to use actual trip IDs if available
+  }, [currentUser, userTrips]);
 
   // Filter expenses whenever selectedTripId or allExpenses change
   useEffect(() => {
     if (selectedTripId) {
       setFilteredExpenses(allExpenses.filter(exp => exp.tripId === selectedTripId));
     } else {
-      setFilteredExpenses([]); // Or show all if no trip selected: setFilteredExpenses(allExpenses)
+      setFilteredExpenses([]);
     }
   }, [selectedTripId, allExpenses]);
 
+  // Derive users for the selected trip to be used in various places
+  const usersInCurrentTrip = useMemo(() => {
+    if (selectedTrip && selectedTrip.members) {
+      return Object.values(selectedTrip.members).map(member => {
+        const fullUser = users.find(u => u.id === member.uid); // Get details from global `users` if available
+        return {
+          id: member.uid,
+          name: fullUser?.name || member.name || `User...${member.uid.slice(-4)}`,
+          email: fullUser?.email || member.email,
+        };
+      });
+    }
+    return [];
+  }, [selectedTrip, users]);
+
 
   const calculateBalancesAndTotal = useCallback(() => {
-    const expensesToProcess = filteredExpenses; // Use filtered expenses
-    if (users.length === 0 || expensesToProcess.length === 0 && !selectedTripId) {
+    const activeUsers = usersInCurrentTrip; // Users relevant to the selected trip
+    const expensesToProcess = filteredExpenses;
+
+    if (activeUsers.length === 0 || (expensesToProcess.length === 0 && !selectedTripId)) {
       setBalances([]);
       setTotalGroupExpense(0);
       return;
     }
      if (expensesToProcess.length === 0 && selectedTripId) {
-      setBalances([]); // Clear balances if trip selected but no expenses for it
-      setTotalGroupExpense(0); // Clear total if trip selected but no expenses for it
+      setBalances([]); 
+      setTotalGroupExpense(0);
     }
-
 
     let newTotalGroupExpense = 0;
     const userExpensesSummary: { [userId: string]: { paid: number; share: number } } = {};
 
-    users.forEach(user => {
+    activeUsers.forEach(user => {
       userExpensesSummary[user.id] = { paid: 0, share: 0 };
     });
 
     expensesToProcess.forEach(expense => {
       newTotalGroupExpense += expense.amount;
-      if (userExpensesSummary[expense.paidByUserId]) {
+      // Only count payment if payer is part of the active users for this trip context
+      if (userExpensesSummary[expense.paidByUserId] && activeUsers.some(u => u.id === expense.paidByUserId)) {
         userExpensesSummary[expense.paidByUserId].paid += expense.amount;
       }
 
-      const numParticipants = expense.participantIds.length;
+      // Filter participants to only those active in the current trip
+      const participantsInExpenseForThisTrip = expense.participantIds.filter(pid => activeUsers.some(u => u.id === pid));
+      const numParticipants = participantsInExpenseForThisTrip.length;
+
       if (numParticipants > 0) {
         const sharePerParticipant = expense.amount / numParticipants;
-        expense.participantIds.forEach(pid => {
-          if (userExpensesSummary[pid]) {
+        participantsInExpenseForThisTrip.forEach(pid => {
+          if (userExpensesSummary[pid]) { // This check implies pid is in activeUsers
             userExpensesSummary[pid].share += sharePerParticipant;
           }
         });
       }
     });
 
-    const newBalances: Balance[] = users.map(user => ({
+    const newBalances: Balance[] = activeUsers.map(user => ({
       userId: user.id,
       userName: user.name,
       totalPaid: userExpensesSummary[user.id]?.paid || 0,
@@ -155,11 +175,11 @@ export default function ExpensesPage() {
 
     setBalances(newBalances);
     setTotalGroupExpense(newTotalGroupExpense);
-  }, [filteredExpenses, users, settledStatus, selectedTripId]); // Depend on filteredExpenses
+  }, [filteredExpenses, usersInCurrentTrip, settledStatus, selectedTripId]);
 
   useEffect(() => {
     calculateBalancesAndTotal();
-  }, [filteredExpenses, users, settledStatus, calculateBalancesAndTotal]);
+  }, [calculateBalancesAndTotal]); // calculateBalancesAndTotal has usersInCurrentTrip in its deps
 
   useEffect(() => {
     if (tripBudget !== null && totalGroupExpense > tripBudget && selectedTripId) {
@@ -212,7 +232,7 @@ export default function ExpensesPage() {
       toast({ title: "Success", description: "Expense added." });
     }
     setIsExpenseDialogOpen(false);
-    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id) }); 
+    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: usersInCurrentTrip.map(u => u.id) }); 
     setEditingExpenseId(null);
   };
 
@@ -232,14 +252,14 @@ export default function ExpensesPage() {
       toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip first to add an expense to it." });
       return;
     }
-    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id), date: new Date().toISOString().split('T')[0], tripId: selectedTripId });
+    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: usersInCurrentTrip.map(u => u.id), date: new Date().toISOString().split('T')[0], tripId: selectedTripId });
     setEditingExpenseId(null);
     setIsExpenseDialogOpen(true);
   };
 
   const handleMarkAsSettled = (userIdToSettle: string) => {
     setSettledStatus(prev => ({ ...prev, [userIdToSettle]: true }));
-    const userName = users.find(u => u.id === userIdToSettle)?.name || 'User';
+    const userName = usersInCurrentTrip.find(u => u.id === userIdToSettle)?.name || 'User';
     toast({ title: "Success", description: `${userName}'s balance marked as settled for trip "${selectedTrip?.name}".` });
   };
 
@@ -258,7 +278,7 @@ export default function ExpensesPage() {
       toast({ variant: "destructive", title: "Invalid Budget", description: "Please enter a valid positive number for the budget." });
       return;
     }
-    setTripBudget(newBudget); // In a real app, this would be per-trip and saved to DB
+    setTripBudget(newBudget); 
     toast({ title: "Success", description: `Budget for trip "${selectedTrip?.name}" set to ${newBudget.toFixed(2)}.` });
     setIsBudgetDialogOpen(false);
   };
@@ -274,7 +294,7 @@ export default function ExpensesPage() {
 
   const expenseDataForChart = expenseCategories.map(category => ({
     name: category,
-    total: filteredExpenses // Use filtered expenses
+    total: filteredExpenses 
       .filter(exp => exp.category === category)
       .reduce((sum, exp) => sum + exp.amount, 0),
     fill: categoryColors[category] || 'hsl(var(--muted))',
@@ -375,7 +395,7 @@ export default function ExpensesPage() {
               <Select name="paidByUserId" value={currentExpense.paidByUserId} onValueChange={handleSelectChange('paidByUserId')}>
                 <SelectTrigger className="col-span-3 bg-background"><SelectValue placeholder="Select who paid" /></SelectTrigger>
                 <SelectContent>
-                  {users.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
+                  {usersInCurrentTrip.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -386,7 +406,7 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-4 items-start gap-4">
               <Label className="text-right pt-2">Participants</Label>
               <div className="col-span-3 space-y-2">
-                {users.map(user => (
+                {usersInCurrentTrip.map(user => (
                   <div key={user.id} className="flex items-center space-x-2">
                     <Checkbox
                       id={`participant-${user.id}`}
@@ -396,7 +416,7 @@ export default function ExpensesPage() {
                     <Label htmlFor={`participant-${user.id}`}>{user.name}</Label>
                   </div>
                 ))}
-                 <Button variant="outline" size="sm" onClick={() => setCurrentExpense(prev => ({...prev, participantIds: users.map(u => u.id)}))}>Select All</Button>
+                 <Button variant="outline" size="sm" onClick={() => setCurrentExpense(prev => ({...prev, participantIds: usersInCurrentTrip.map(u => u.id)}))}>Select All</Button>
                  <Button variant="outline" size="sm" onClick={() => setCurrentExpense(prev => ({...prev, participantIds: []}))} className="ml-2">Deselect All</Button>
               </div>
             </div>
@@ -564,7 +584,7 @@ export default function ExpensesPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-muted-foreground">No balances to display for this trip. Add some expenses!</p>
+                <p className="text-muted-foreground">No balances to display for this trip. Add some expenses or ensure trip members are correctly loaded!</p>
               )}
             </CardContent>
           </Card>
@@ -598,7 +618,7 @@ export default function ExpensesPage() {
           )}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredExpenses.map(expense => {
-                const paidByUser = users.find(u => u.id === expense.paidByUserId);
+                const paidByUser = usersInCurrentTrip.find(u => u.id === expense.paidByUserId) || users.find(u => u.id === expense.paidByUserId) ; // Fallback to global users if not in trip (e.g. old data)
                 const CategoryIcon = categoryIcons[expense.category] || DollarSign;
                 return (
                 <Card key={expense.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col bg-card">
@@ -611,7 +631,7 @@ export default function ExpensesPage() {
                     </CardHeader>
                     <CardContent className="flex-grow text-sm">
                     <p className="text-muted-foreground">Paid by: <span className="font-medium text-foreground">{paidByUser?.name || 'Unknown User'}</span></p>
-                    <p className="text-muted-foreground mt-1">Participants: <span className="font-medium text-foreground">{expense.participantIds.map(pid => users.find(u=>u.id===pid)?.name || 'Unknown').join(', ')}</span></p>
+                    <p className="text-muted-foreground mt-1">Participants: <span className="font-medium text-foreground">{expense.participantIds.map(pid => (usersInCurrentTrip.find(u=>u.id===pid) || users.find(u=>u.id===pid))?.name || 'Unknown').join(', ')}</span></p>
                     <p className="text-xs text-muted-foreground mt-1">Split: Equally among participants</p>
                     </CardContent>
                     <CardFooter className="flex justify-end gap-2 border-t pt-4">
