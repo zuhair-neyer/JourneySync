@@ -40,6 +40,7 @@ export function JoinTripForm() {
     if (!currentUser.displayName || currentUser.displayName.trim() === "") {
       toast({ variant: "destructive", title: "Display Name Not Set", description: "Your display name is syncing. Please wait a moment and try again, or update it in your account settings." });
       console.error("[JoinTripForm] handleSubmit: currentUser.displayName is missing or empty. CurrentUser:", { uid: currentUser.uid, email: currentUser.email, displayName: currentUser.displayName});
+      setIsLoading(false);
       return;
     }
     if (!tripId.trim()) {
@@ -93,7 +94,7 @@ export function JoinTripForm() {
           </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isLoading || !currentUser || !currentUser.displayName}>
+          <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isLoading || !currentUser || !currentUser.displayName || currentUser.displayName.trim() === ""}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
             Join Trip
           </Button>

@@ -11,40 +11,39 @@ interface BasicUserInfo {
 }
 
 function generateMemberName(userInfo: BasicUserInfo): string {
-  console.log("[tripService] generateMemberName input userInfo.displayName:", userInfo.displayName);
-  console.log("[tripService] generateMemberName input userInfo.email:", userInfo.email);
+  console.log("[tripService] generateMemberName: Input userInfo.displayName:", userInfo.displayName, "Input userInfo.email:", userInfo.email, "Input userInfo.uid:", userInfo.uid);
   if (userInfo.displayName && userInfo.displayName.trim() !== "") {
-    console.log("[tripService] generateMemberName using displayName:", userInfo.displayName.trim());
-    return userInfo.displayName.trim();
+    const nameToUse = userInfo.displayName.trim();
+    console.log("[tripService] generateMemberName: Using displayName:", nameToUse);
+    return nameToUse;
   }
   if (userInfo.email) {
     const emailNamePart = userInfo.email.split('@')[0];
     if (emailNamePart && emailNamePart.trim() !== "") {
-      console.log("[tripService] generateMemberName using email prefix:", emailNamePart);
+      console.log("[tripService] generateMemberName: Using email prefix:", emailNamePart);
       return emailNamePart;
     }
   }
   const fallbackName = `User...${userInfo.uid.substring(userInfo.uid.length - 4)}`;
-  console.log("[tripService] generateMemberName using fallback:", fallbackName);
+  console.log("[tripService] generateMemberName: Using fallback:", fallbackName);
   return fallbackName; 
 }
 
 export async function createTripInDb(tripName: string, userInfo: BasicUserInfo): Promise<string | null> {
   console.log("[tripService] createTripInDb: Received userInfo:", JSON.stringify(userInfo));
-  console.log("[tripService] Attempting to create trip. Name:", tripName, "User ID:", userInfo.uid, "Display Name from userInfo for create:", userInfo.displayName);
+  console.log("[tripService] createTripInDb: Attempting to create trip. Name:", tripName, "User ID:", userInfo.uid, "Display Name from userInfo for create:", userInfo.displayName);
 
 
   if (!tripName.trim()) {
-    console.error("[tripService] Trip name cannot be empty.");
+    console.error("[tripService] createTripInDb: Trip name cannot be empty.");
     return null;
   }
   if (!userInfo || !userInfo.uid) {
-    console.error("[tripService] User info or UID is missing. userInfo received:", JSON.stringify(userInfo));
+    console.error("[tripService] createTripInDb: User info or UID is missing. userInfo received:", JSON.stringify(userInfo));
     return null;
   }
    if (!userInfo.displayName || userInfo.displayName.trim() === "") {
     console.warn("[tripService] createTripInDb: userInfo.displayName is missing or empty. Member name will be generated based on fallback logic.");
-    // The generateMemberName function will handle this, but good to log.
   }
 
   try {
@@ -53,12 +52,12 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     const tripId = newTripRef.key;
 
     if (!tripId) {
-      console.error("[tripService] CRITICAL: Failed to generate trip ID from Firebase push.");
+      console.error("[tripService] createTripInDb: CRITICAL: Failed to generate trip ID from Firebase push.");
       return null;
     }
     
     const memberName = generateMemberName(userInfo);
-    console.log("[tripService] createTripInDb: Generated memberName:", memberName, "from userInfo.displayName:", userInfo.displayName, "and email:", userInfo.email);
+    console.log("[tripService] createTripInDb: Generated memberName for trip creator:", memberName, "from userInfo.displayName:", userInfo.displayName, "and email:", userInfo.email);
 
 
     const newTripData: Omit<Trip, 'id'> = {
@@ -83,12 +82,12 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     };
     await set(userTripRef, userTripInfoData);
 
-    console.log("[tripService] createTripInDb SUCCEEDED for tripId:", tripId);
+    console.log("[tripService] createTripInDb: SUCCEEDED for tripId:", tripId);
     return tripId;
   } catch (error: any) {
-    console.error("[tripService] ERROR creating trip:", error.message, "(Code:", error.code || 'N/A', ")");
+    console.error("[tripService] createTripInDb: ERROR creating trip:", error.message, "(Code:", error.code || 'N/A', ")");
     if (error.code === 'PERMISSION_DENIED') {
-        console.error("[tripService] PERMISSION DENIED. This is a critical error. Please check your Firebase Realtime Database rules for the '/trips' and '/users' paths. Ensure authenticated users have write permissions to 'trips/{newTripId}' and 'users/{userId}/trips/{newTripId}'.");
+        console.error("[tripService] createTripInDb: PERMISSION DENIED. Check Firebase Realtime Database rules for '/trips' and '/users'.");
     }
     return null;
   }
@@ -96,14 +95,14 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
 
 export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Promise<boolean> {
   console.log("[tripService] joinTripInDb: Received userInfo:", JSON.stringify(userInfo));
-  console.log("[tripService] Attempting to join trip. TripID:", tripId, "User ID:", userInfo.uid, "Display Name from userInfo for join:", userInfo.displayName);
+  console.log("[tripService] joinTripInDb: Attempting to join trip. TripID:", tripId, "User ID:", userInfo.uid, "Display Name from userInfo for join:", userInfo.displayName);
 
   if (!tripId.trim()) {
-    console.error("[tripService] Trip ID cannot be empty for joining.");
+    console.error("[tripService] joinTripInDb: Trip ID cannot be empty for joining.");
     return false;
   }
    if (!userInfo || !userInfo.uid) {
-    console.error("[tripService] User info or UID is missing for joining trip. userInfo received:", JSON.stringify(userInfo));
+    console.error("[tripService] joinTripInDb: User info or UID is missing for joining trip. userInfo received:", JSON.stringify(userInfo));
     return false;
   }
   if (!userInfo.displayName || userInfo.displayName.trim() === "") {
@@ -115,17 +114,17 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     const tripSnapshot = await get(tripRef);
 
     if (!tripSnapshot.exists()) {
-      console.error("[tripService] Trip not found with ID:", tripId);
+      console.error("[tripService] joinTripInDb: Trip not found with ID:", tripId);
       return false;
     }
 
     const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; 
 
-    const memberName = generateMemberName(userInfo); // Generate name before checking if already member, to ensure it's up-to-date if they are.
-    console.log("[tripService] joinTripInDb: Generated memberName:", memberName, "from userInfo.displayName:", userInfo.displayName, "and email:", userInfo.email);
+    const memberName = generateMemberName(userInfo); 
+    console.log("[tripService] joinTripInDb: Generated memberName for joining user:", memberName, "from userInfo.displayName:", userInfo.displayName, "and email:", userInfo.email);
 
     if (tripData.members && tripData.members[userInfo.uid]) {
-      console.log("[tripService] User is already a member of this trip:", tripId);
+      console.log("[tripService] joinTripInDb: User is already a member of this trip:", tripId);
       const existingMemberData = tripData.members[userInfo.uid];
       const updatesForExistingMember: Partial<TripMember> = {};
       let consistencyUpdatesNeeded = false;
@@ -133,7 +132,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       if (existingMemberData.name !== memberName) {
         updatesForExistingMember.name = memberName;
         consistencyUpdatesNeeded = true;
-        console.log(`[tripService] Updating member name in trip ${tripId} from '${existingMemberData.name}' to '${memberName}'`);
+        console.log(`[tripService] joinTripInDb: Updating member name in trip ${tripId} from '${existingMemberData.name}' to '${memberName}'`);
       }
       // Could add email update check here too if necessary
 
@@ -141,7 +140,6 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
         await update(ref(database, `/trips/${tripId}/members/${userInfo.uid}`), updatesForExistingMember);
       }
       
-      // Ensure their local /users/{uid}/trips entry is consistent
       const userTripRef = ref(database, `users/${userInfo.uid}/trips/${tripId}`);
       const userTripSnapshot = await get(userTripRef);
       const expectedNameInUserTrips = tripData.name;
@@ -150,7 +148,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       if (!userTripSnapshot.exists() || 
           userTripSnapshot.val().name !== expectedNameInUserTrips || 
           userTripSnapshot.val().role !== expectedRole) {
-         console.log("[tripService] Updating user's local trip entry for consistency for tripId:", tripId);
+         console.log("[tripService] joinTripInDb: Updating user's local trip entry for consistency for tripId:", tripId);
          await set(userTripRef, { name: expectedNameInUserTrips, role: expectedRole });
       }
       return true; 
@@ -164,7 +162,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     };
 
     if (!tripData.name) {
-        console.error("[tripService] CRITICAL: Trip data for joining is missing a name. Trip ID:", tripId);
+        console.error("[tripService] joinTripInDb: CRITICAL: Trip data for joining is missing a name. Trip ID:", tripId);
         return false; 
     }
 
@@ -176,19 +174,19 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     };
     
     await update(ref(database), updates);
-    console.log("[tripService] Successfully joined trip:", tripId);
+    console.log("[tripService] joinTripInDb: Successfully joined trip:", tripId);
     return true;
   } catch (error: any) {
-    console.error("[tripService] ERROR joining trip:", error.message, "(Code:", error.code || 'N/A', ")");
+    console.error("[tripService] joinTripInDb: ERROR joining trip:", error.message, "(Code:", error.code || 'N/A', ")");
     if (error.code === 'PERMISSION_DENIED') {
-         console.error("[tripService] PERMISSION DENIED. Check Firebase Realtime Database rules. Ensure authenticated users can read 'trips/{tripId}' and write to 'trips/{tripId}/members/{userId}' and 'users/{userId}/trips/{tripId}'.");
+         console.error("[tripService] joinTripInDb: PERMISSION DENIED. Check Firebase Realtime Database rules.");
     }
     return false;
   }
 }
 
 export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]> {
-  console.log("[tripService] Fetching user trips for userId:", userId);
+  console.log("[tripService] getUserTripsFromDb: Fetching user trips for userId:", userId);
   if (!userId) {
     console.warn("[tripService] getUserTripsFromDb called with no userId.");
     return [];
@@ -203,24 +201,24 @@ export async function getUserTripsFromDb(userId: string): Promise<UserTripInfo[]
         name: tripsData[tripId].name,
         role: tripsData[tripId].role,
       }));
-      console.log(`[tripService] Found ${userTripsArray.length} trips for user ${userId}.`);
+      console.log(`[tripService] getUserTripsFromDb: Found ${userTripsArray.length} trips for user ${userId}.`);
       return userTripsArray;
     }
-    console.log("[tripService] No trips found for userId:", userId);
+    console.log("[tripService] getUserTripsFromDb: No trips found for userId:", userId);
     return [];
   } catch (error: any) {
-    console.error("[tripService] Error fetching user trips for UserID:", userId, "Error:", error.message, "(Code:", error.code || 'N/A', ")");
+    console.error("[tripService] getUserTripsFromDb: Error fetching user trips for UserID:", userId, "Error:", error.message, "(Code:", error.code || 'N/A', ")");
     if (error.code === 'PERMISSION_DENIED') {
-        console.error("[tripService] PERMISSION DENIED while fetching user trips. Check rules for reading '/users/" + userId + "/trips'.");
+        console.error("[tripService] getUserTripsFromDb: PERMISSION DENIED while fetching user trips. Check rules for reading '/users/" + userId + "/trips'.");
     }
     return [];
   }
 }
 
 export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null> {
-  console.log("[tripService] Fetching trip details for tripId:", tripId);
+  console.log("[tripService] getTripDetailsFromDb: Fetching trip details for tripId:", tripId);
   if (!tripId) {
-    console.warn("[tripService] getTripDetailsFromDb called with no tripId.");
+    console.warn("[tripService] getTripDetailsFromDb: called with no tripId.");
     return null;
   }
   try {
@@ -228,15 +226,18 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     const snapshot = await get(tripRef);
     if (snapshot.exists()) {
       const tripDetails = { id: tripId, ...snapshot.val() } as Trip;
-      console.log(`[tripService] Found trip details for tripId ${tripId}.`);
+      console.log(`[tripService] getTripDetailsFromDb: Found trip details for tripId ${tripId}. Member count: ${Object.keys(tripDetails.members || {}).length}`);
+      Object.values(tripDetails.members || {}).forEach(member => {
+        console.log(`[tripService] getTripDetailsFromDb: Member UID: ${member.uid}, Name: ${member.name}, Email: ${member.email}`);
+      });
       return tripDetails;
     }
-    console.log("[tripService] No trip details found for tripId:", tripId);
+    console.log("[tripService] getTripDetailsFromDb: No trip details found for tripId:", tripId);
     return null;
   } catch (error: any) {
-    console.error("[tripService] Error fetching trip details for TripID:", tripId, "Error:", error.message, "(Code:", error.code || 'N/A', ")");
+    console.error("[tripService] getTripDetailsFromDb: Error fetching trip details for TripID:", tripId, "Error:", error.message, "(Code:", error.code || 'N/A', ")");
      if (error.code === 'PERMISSION_DENIED') {
-        console.error("[tripService] PERMISSION DENIED while fetching trip details. Check rules for reading '/trips/" + tripId + "'.");
+        console.error("[tripService] getTripDetailsFromDb: PERMISSION DENIED while fetching trip details. Check rules for reading '/trips/" + tripId + "'.");
     }
     return null;
   }
