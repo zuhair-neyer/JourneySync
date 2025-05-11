@@ -13,14 +13,13 @@ interface BasicUserInfo {
 function generateMemberName(userInfo: BasicUserInfo): string {
   console.log("[tripService] generateMemberName: Input userInfo.displayName:", userInfo.displayName, "Input userInfo.email:", userInfo.email, "Input userInfo.uid:", userInfo.uid);
   
-  // Prioritize a valid displayName that isn't "Anonymous User" (case-insensitive)
-  if (userInfo.displayName && userInfo.displayName.trim() !== "" && userInfo.displayName.trim().toLowerCase() !== "anonymous user") {
-    const nameToUse = userInfo.displayName.trim();
-    console.log("[tripService] generateMemberName: Using displayName:", nameToUse);
-    return nameToUse;
+  const displayName = userInfo.displayName?.trim();
+  
+  if (displayName && displayName !== "" && displayName.toLowerCase() !== "anonymous user") {
+    console.log("[tripService] generateMemberName: Using displayName:", displayName);
+    return displayName;
   }
 
-  // Fallback to email prefix if displayName is not suitable
   if (userInfo.email) {
     const emailNamePart = userInfo.email.split('@')[0];
     if (emailNamePart && emailNamePart.trim() !== "") {
@@ -29,7 +28,6 @@ function generateMemberName(userInfo: BasicUserInfo): string {
     }
   }
   
-  // Ultimate fallback to a UID-based name
   const fallbackName = `User...${userInfo.uid.substring(userInfo.uid.length - 4)}`;
   console.log("[tripService] generateMemberName: Using fallback (uid-based):", fallbackName);
   return fallbackName;
@@ -138,9 +136,13 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       const existingMemberData = tripData.members[userInfo.uid];
       const updatesForExistingMember: Partial<TripMember> = {};
       let consistencyUpdatesNeeded = false;
-
+      
       // Only update name if it's different and the new name is not the generic fallback (unless current is also fallback)
-      if (existingMemberData.name !== memberName && (!memberName.startsWith("User...") || existingMemberData.name?.startsWith("User..."))) {
+      // OR if the existing name is a fallback and the new name is not.
+      const newNameIsBetter = memberName && !memberName.startsWith("User...");
+      const currentNameIsFallback = existingMemberData.name?.startsWith("User...");
+
+      if (existingMemberData.name !== memberName && (newNameIsBetter || currentNameIsFallback)) {
         updatesForExistingMember.name = memberName;
         consistencyUpdatesNeeded = true;
         console.log(`[tripService] joinTripInDb: Updating member name in trip ${tripId} from '${existingMemberData.name}' to '${memberName}'`);
@@ -235,7 +237,25 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     const tripRef = ref(database, `trips/${tripId}`);
     const snapshot = await get(tripRef);
     if (snapshot.exists()) {
-      const tripDetails = { id: tripId, ...snapshot.val() } as Trip;
+      const tripData = snapshot.val();
+      // Ensure members object exists
+      const members = tripData.members || {};
+      const processedMembers: { [uid: string]: TripMember } = {};
+
+      for (const uid in members) {
+        const member = members[uid];
+        processedMembers[uid] = {
+          ...member,
+          name: member.name || generateMemberName({ uid, displayName: member.name, email: member.email }),
+        };
+      }
+      
+      const tripDetails = { 
+        id: tripId, 
+        ...tripData,
+        members: processedMembers // Use the processed members
+      } as Trip;
+
       console.log(`[tripService] getTripDetailsFromDb: Found trip details for tripId ${tripId}. Member count: ${Object.keys(tripDetails.members || {}).length}`);
       Object.values(tripDetails.members || {}).forEach(member => {
         console.log(`[tripService] getTripDetailsFromDb: Member UID: ${member.uid}, Name: ${member.name}, Email: ${member.email}`);
@@ -250,5 +270,67 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         console.error("[tripService] getTripDetailsFromDb: PERMISSION DENIED while fetching trip details. Check rules for reading '/trips/" + tripId + "'.");
     }
     return null;
+  }
+}
+
+
+export async function updateUserDisplayNameInTrips(userId: string, newDisplayName: string): Promise<void> {
+  console.log(`[tripService] updateUserDisplayNameInTrips: Updating display name to "${newDisplayName}" for user ID: ${userId}`);
+  if (!userId || !newDisplayName || newDisplayName.trim() === "") {
+    console.error("[tripService] updateUserDisplayNameInTrips: User ID or new display name is invalid.");
+    return;
+  }
+
+  try {
+    const userTripsSnapshot = await get(ref(database, `users/${userId}/trips`));
+    if (!userTripsSnapshot.exists()) {
+      console.log(`[tripService] updateUserDisplayNameInTrips: User ${userId} is not part of any trips. No updates needed.`);
+      return;
+    }
+
+    const userTripsData = userTripsSnapshot.val();
+    const tripIds = Object.keys(userTripsData);
+    
+    if (tripIds.length === 0) {
+      console.log(`[tripService] updateUserDisplayNameInTrips: User ${userId} has no trip entries. No updates needed.`);
+      return;
+    }
+
+    const updates: { [key: string]: any } = {};
+    let updatesMade = false;
+
+    for (const tripId of tripIds) {
+      // Check if the member exists in the trip before attempting to update
+      const memberNamePath = `/trips/${tripId}/members/${userId}/name`;
+      const memberSnapshot = await get(ref(database, `/trips/${tripId}/members/${userId}`));
+      
+      if (memberSnapshot.exists()) {
+        // Only update if the name is different or if the current name is a fallback
+        const currentMemberData = memberSnapshot.val() as TripMember;
+        const currentNameIsFallback = currentMemberData.name?.startsWith("User...");
+        if (currentMemberData.name !== newDisplayName || currentNameIsFallback) {
+             updates[memberNamePath] = newDisplayName;
+             updatesMade = true;
+             console.log(`[tripService] updateUserDisplayNameInTrips: Queued update for trip ${tripId}, user ${userId} to name "${newDisplayName}"`);
+        } else {
+             console.log(`[tripService] updateUserDisplayNameInTrips: Name in trip ${tripId} for user ${userId} is already "${newDisplayName}". Skipping.`);
+        }
+      } else {
+        console.warn(`[tripService] updateUserDisplayNameInTrips: User ${userId} listed in users/${userId}/trips/${tripId} but not found in trips/${tripId}/members. Skipping name update for this trip.`);
+      }
+    }
+    
+    if (updatesMade) {
+        await update(ref(database), updates);
+        console.log(`[tripService] updateUserDisplayNameInTrips: Successfully updated display name for user ${userId} in relevant trips.`);
+    } else {
+        console.log(`[tripService] updateUserDisplayNameInTrips: No actual name changes required for user ${userId} in their trips.`);
+    }
+
+  } catch (error: any) {
+    console.error(`[tripService] updateUserDisplayNameInTrips: Error updating display names for user ${userId}:`, error.message, "(Code:", error.code || 'N/A', ")");
+    if (error.code === 'PERMISSION_DENIED') {
+        console.error("[tripService] updateUserDisplayNameInTrips: PERMISSION DENIED. Check Firebase Realtime Database rules for writing to '/trips'.");
+    }
   }
 }

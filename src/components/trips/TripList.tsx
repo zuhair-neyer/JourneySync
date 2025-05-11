@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect } from 'react'; // Added useEffect
 import { useTripContext } from '@/contexts/TripContext';
 import { TripCard } from './TripCard';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,10 +14,33 @@ export function TripList() {
     isLoadingUserTrips, 
     selectedTrip, 
     isLoadingSelectedTrip, 
-    selectedTripId, // Use selectedTripId to know if a selection attempt was made
+    selectedTripId, 
+    setSelectedTripId, // To refresh selected trip if needed
     errorUserTrips,
     errorSelectedTrip 
   } = useTripContext();
+
+  // Effect to re-fetch selected trip details if the selectedTripId is already set
+  // and userTrips (which might trigger this component to update) changes.
+  // This helps if a trip name was updated by another action.
+  useEffect(() => {
+    if (selectedTripId && !isLoadingUserTrips) {
+      // Trigger a re-fetch of the selected trip to get latest details
+      // This is a bit of a trick: setting it to null then back to the ID
+      // can trigger the fetch logic in TripContext if dependencies are set up correctly.
+      // A more direct refreshSelectedTrip() function in context would be cleaner.
+      // For now, let's rely on TripContext's useEffect for selectedTripId.
+      // If the name changed in the list, the TripCard itself will show the new name.
+      // This is more about the detailed "Selected Trip" view.
+      // A simple way to force re-fetch of selected trip details:
+      // setSelectedTripId(null); // This will clear it
+      // setTimeout(() => setSelectedTripId(selectedTripId), 0); // Then set it back
+      // However, a direct refresh function in context is better.
+      // For now, if a displayName update happened, AuthContext update should trigger TripContext,
+      // which should refetch selectedTrip.
+    }
+  }, [userTrips, selectedTripId, isLoadingUserTrips, setSelectedTripId]);
+
 
   if (isLoadingUserTrips) {
     return (
@@ -92,7 +115,7 @@ export function TripList() {
         </div>
       </div>
 
-      {selectedTripId && ( // Show selected trip section if an ID is selected
+      {selectedTripId && ( 
         <Card className="mt-8 shadow-lg bg-card">
           <CardHeader>
             <CardTitle className="text-xl text-primary">
@@ -116,9 +139,12 @@ export function TripList() {
                 <h3 className="font-semibold mb-2 text-foreground">Members:</h3>
                 {selectedTrip.members && Object.keys(selectedTrip.members).length > 0 ? (
                   <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                    {Object.values(selectedTrip.members).map(member => (
-                      <li key={member.uid}>{member.name || member.email || member.uid}</li>
-                    ))}
+                    {Object.values(selectedTrip.members).map(member => {
+                      console.log("[TripList] Displaying member:", JSON.stringify(member));
+                      return (
+                        <li key={member.uid}>{member.name || member.email || `User ${member.uid.substring(0,5)}...`}</li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <p className="text-sm text-muted-foreground">No members listed for this trip yet.</p>
