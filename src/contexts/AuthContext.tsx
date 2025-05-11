@@ -13,7 +13,8 @@ import {
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
-  updateProfile
+  updateProfile,
+  updatePassword as firebaseUpdatePassword // Renamed to avoid conflict
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +27,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<FirebaseUser | null>;
   logIn: (email: string, password: string, rememberMe?: boolean) => Promise<FirebaseUser | null>;
   logOut: () => Promise<void>;
+  updateUserProfile: (name: string) => Promise<void>;
+  updateUserPassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -61,21 +64,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setLoading(true);
     setError(null);
     try {
-      // For sign-up, typically local persistence is desired for a good UX.
       await setPersistence(auth, browserLocalPersistence);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Update profile with display name
       if (userCredential.user) {
         await updateProfile(userCredential.user, {
           displayName: name,
         });
-        // Manually update the currentUser state as onAuthStateChanged might not fire immediately with profile updates
-        setCurrentUser({ ...userCredential.user, displayName: name }); 
+        setCurrentUser({ ...userCredential.user, displayName: name, photoURL: userCredential.user.photoURL, email: userCredential.user.email, emailVerified: userCredential.user.emailVerified, uid: userCredential.user.uid } as FirebaseUser); 
       }
       
       toast({ title: "Success", description: "Account created successfully!" });
-      router.push('/'); // Redirect to dashboard after sign up
+      router.push('/'); 
       return userCredential.user;
     } catch (e) {
       const authError = e as AuthError;
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       setCurrentUser(userCredential.user);
       toast({ title: "Success", description: "Logged in successfully!" });
-      router.push('/'); // Redirect to dashboard after log in
+      router.push('/'); 
       return userCredential.user;
     } catch (e) {
       const authError = e as AuthError;
@@ -115,7 +115,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await firebaseSignOut(auth);
       setCurrentUser(null);
       toast({ title: "Success", description: "Logged out successfully." });
-      router.push('/login'); // Redirect to login page after log out
+      router.push('/login'); 
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
@@ -125,6 +125,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const updateUserProfile = async (name: string) => {
+    if (!auth.currentUser) {
+      setError("No user logged in.");
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in to update your profile." });
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await updateProfile(auth.currentUser, { displayName: name });
+      // Update local currentUser state
+      setCurrentUser(prevUser => prevUser ? ({ ...prevUser, displayName: name } as FirebaseUser) : null);
+      toast({ title: "Success", description: "Profile updated successfully!" });
+    } catch (e) {
+      const authError = e as AuthError;
+      setError(authError.message);
+      toast({ variant: "destructive", title: "Profile update failed", description: authError.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateUserPassword = async (newPassword: string) => {
+    if (!auth.currentUser) {
+      setError("No user logged in.");
+      toast({ variant: "destructive", title: "Error", description: "You must be logged in to update your password." });
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await firebaseUpdatePassword(auth.currentUser, newPassword);
+      toast({ title: "Success", description: "Password updated successfully! Please log in again if prompted." });
+      // Firebase might require re-authentication for password changes, which it handles.
+      // For an enhanced UX, you might redirect to login or prompt for current password first.
+    } catch (e) {
+      const authError = e as AuthError;
+      setError(authError.message);
+      toast({ variant: "destructive", title: "Password update failed", description: authError.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
   const value = {
     currentUser,
     loading,
@@ -133,8 +178,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signUp,
     logIn,
     logOut,
+    updateUserProfile,
+    updateUserPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-

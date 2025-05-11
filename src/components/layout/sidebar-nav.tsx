@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListChecks, MapPin, Sparkles, Luggage, UsersRound, Home, DollarSign, PlaneTakeoff } from "lucide-react"; // Added PlaneTakeoff
+import { ListChecks, MapPin, Sparkles, Luggage, UsersRound, Home, DollarSign, PlaneTakeoff, UserCog } from "lucide-react"; // Added UserCog
 import { cn } from "@/lib/utils";
 import {
   SidebarMenu,
@@ -13,13 +13,14 @@ import {
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
-  { href: "/trips", label: "My Trips", icon: PlaneTakeoff }, // Added Trips link
+  { href: "/trips", label: "My Trips", icon: PlaneTakeoff }, 
   { href: "/itinerary", label: "Itinerary", icon: ListChecks },
   { href: "/map", label: "Map", icon: MapPin },
   { href: "/recommendations", label: "Recommendations", icon: Sparkles },
   { href: "/packing-list", label: "Packing List", icon: Luggage },
   { href: "/polls", label: "Group Polls", icon: UsersRound },
   { href: "/expenses", label: "Expenses", icon: DollarSign },
+  { href: "/account", label: "Account", icon: UserCog }, // Added Account link
 ];
 
 export function SidebarNav() {
