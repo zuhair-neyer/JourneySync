@@ -41,7 +41,8 @@ export interface ItineraryItem {
   notes?: string;
   createdBy: string; // UID of the user who created the item
   createdAt: number; // Timestamp of creation
-  votes: number; // Added votes field, ensuring it's always a number
+  votes: number; 
+  votedBy: string[]; // Array of UIDs of users who voted for this item
   comments: ItineraryComment[]; 
 }
 

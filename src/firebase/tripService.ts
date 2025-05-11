@@ -511,7 +511,8 @@ export async function addItineraryItemToTripDb(tripId: string, itemData: Omit<It
     const itemToAdd: Omit<ItineraryItem, 'tripId'> = { 
         ...itemData, 
         id: itemId,
-        votes: itemData.votes || 0, // Initialize votes to 0 if not provided
+        votes: itemData.votes || 0, 
+        votedBy: itemData.votedBy || [], // Initialize votedBy for new items
         comments: itemData.comments || [], 
     };
     await set(newItemRef, itemToAdd);
@@ -535,7 +536,8 @@ export async function getItineraryItemsForTripFromDb(tripId: string): Promise<It
         ...itemsData[itemId],
         id: itemId,
         tripId: tripId,
-        votes: itemsData[itemId].votes || 0, // Ensure votes is a number, default to 0
+        votes: itemsData[itemId].votes || 0,
+        votedBy: itemsData[itemId].votedBy || [], // Ensure votedBy exists
         comments: itemsData[itemId].comments || [], 
       }));
       return itemsArray;
@@ -562,7 +564,8 @@ export async function updateItineraryItemInTripDb(tripId: string, itemId: string
     if (itemData.date !== undefined) updates[`${basePath}/date`] = itemData.date;
     if (itemData.time !== undefined) updates[`${basePath}/time`] = itemData.time;
     if (itemData.notes !== undefined) updates[`${basePath}/notes`] = itemData.notes;
-    if (itemData.votes !== undefined) updates[`${basePath}/votes`] = itemData.votes; // Preserve votes
+    if (itemData.votes !== undefined) updates[`${basePath}/votes`] = itemData.votes;
+    if (itemData.votedBy !== undefined) updates[`${basePath}/votedBy`] = itemData.votedBy; // Handle votedBy updates
     // Comments are handled by addCommentToItineraryItemDb
 
     if (Object.keys(updates).length === 0) {

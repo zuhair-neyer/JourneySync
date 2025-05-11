@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, Edit2, Trash2, Calendar, Clock, MapPin as LocationPin, Users, MessageSquare, Loader2, Info, Send, ThumbsUp } from "lucide-react";
+import { PlusCircle, Edit2, Trash2, Calendar, Clock, MapPin as LocationPin, Users, MessageSquare, Loader2, Info, Send, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Image from 'next/image';
 import type { ItineraryItem, ItineraryComment } from '@/types';
@@ -27,11 +26,11 @@ export default function ItineraryPage() {
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentItem, setCurrentItem] = useState<Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'comments'>>>({
-    title: '', description: '', location: '', date: '', time: '', notes: '', votes: 0
+    title: '', description: '', location: '', date: '', time: '', notes: '', votes: 0, votedBy: []
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newCommentTexts, setNewCommentTexts] = useState<Record<string, string>>({}); // { itemId: commentText }
-  
+
   const fetchTripItineraryItems = useCallback(async () => {
     if (!selectedTripId) {
       setItems([]);
@@ -40,7 +39,12 @@ export default function ItineraryPage() {
     setIsLoadingItems(true);
     try {
       const fetchedItems = await getItineraryItemsForTripFromDb(selectedTripId);
-      setItems(fetchedItems.map(item => ({ ...item, comments: item.comments || [], votes: item.votes || 0 })));
+      setItems(fetchedItems.map(item => ({
+        ...item,
+        comments: item.comments || [],
+        votes: item.votes || 0,
+        votedBy: item.votedBy || []
+      })));
     } catch (error) {
       console.error("Failed to fetch itinerary items:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load itinerary for this trip." });
@@ -78,12 +82,14 @@ export default function ItineraryPage() {
       notes: currentItem.notes || '',
       createdBy: currentUser.uid,
       createdAt: Date.now(),
-      votes: currentItem.votes || 0,
-      comments: [], 
+      votes: 0, // New items start with 0 votes
+      votedBy: [], // New items start with no one having voted
+      comments: [],
     };
-    
+
     let success = false;
     if (editingId) {
+      const existingItem = items.find(i => i.id === editingId);
       const updateData: Partial<Omit<ItineraryItem, 'id'|'tripId'|'createdBy'|'createdAt'|'comments'>> = {
         title: currentItem.title,
         description: currentItem.description,
@@ -91,7 +97,8 @@ export default function ItineraryPage() {
         date: currentItem.date,
         time: currentItem.time,
         notes: currentItem.notes,
-        votes: items.find(i => i.id === editingId)?.votes || 0, 
+        votes: existingItem?.votes || 0,
+        votedBy: existingItem?.votedBy || [],
       };
       success = await updateItineraryItemInTripDb(selectedTripId, editingId, updateData);
       if (success) toast({ title: "Success", description: "Itinerary item updated." });
@@ -102,11 +109,11 @@ export default function ItineraryPage() {
           toast({ title: "Success", description: "Itinerary item added." });
       }
     }
-    
+
     if (success) {
       fetchTripItineraryItems();
       setIsDialogOpen(false);
-      setCurrentItem({ title: '', description: '', location: '', date: '', time: '', notes: '', votes: 0 });
+      setCurrentItem({ title: '', description: '', location: '', date: '', time: '', notes: '', votes: 0, votedBy: [] });
       setEditingId(null);
     } else {
       toast({ variant: "destructive", title: "Error", description: `Failed to ${editingId ? 'update' : 'add'} itinerary item.` });
@@ -122,6 +129,7 @@ export default function ItineraryPage() {
       time: item.time,
       notes: item.notes,
       votes: item.votes || 0,
+      votedBy: item.votedBy || [],
     });
     setEditingId(item.id);
     setIsDialogOpen(true);
@@ -144,13 +152,13 @@ export default function ItineraryPage() {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete itinerary item." });
     }
   };
-  
+
   const openNewItemDialog = () => {
     if (!selectedTripId) {
       toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip first to add an itinerary item." });
       return;
     }
-    setCurrentItem({ title: '', description: '', location: '', date: new Date().toISOString().split('T')[0], time: '12:00', notes: '', votes: 0});
+    setCurrentItem({ title: '', description: '', location: '', date: new Date().toISOString().split('T')[0], time: '12:00', notes: '', votes: 0, votedBy: []});
     setEditingId(null);
     setIsDialogOpen(true);
   };
@@ -176,18 +184,18 @@ export default function ItineraryPage() {
       text: commentText,
       createdAt: Date.now(),
     };
-    
+
     const commentWithId: ItineraryComment = {
         ...newComment,
         id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    }
+    };
 
     const success = await addCommentToItineraryItemDb(selectedTripId, itemId, commentWithId);
 
     if (success) {
       toast({ title: "Success", description: "Comment added." });
-      setNewCommentTexts(prev => ({ ...prev, [itemId]: '' })); 
-      fetchTripItineraryItems(); 
+      setNewCommentTexts(prev => ({ ...prev, [itemId]: '' }));
+      fetchTripItineraryItems();
     } else {
       toast({ variant: "destructive", title: "Error", description: "Failed to add comment." });
     }
@@ -205,24 +213,29 @@ export default function ItineraryPage() {
       return;
     }
 
-    const newVoteCount = (itemToVoteOn.votes || 0) + 1;
-    
-    // Optimistic UI Update
-    setItems(prevItems => prevItems.map(i => i.id === itemId ? { ...i, votes: newVoteCount } : i));
+    const currentVotedBy = itemToVoteOn.votedBy || [];
+    if (currentVotedBy.includes(currentUser.uid)) {
+      toast({ title: "Already Voted", description: `You have already voted for "${itemToVoteOn.title}".` });
+      return;
+    }
 
-    const success = await updateItineraryItemInTripDb(selectedTripId, itemId, { votes: newVoteCount });
+    const newVotedBy = [...currentVotedBy, currentUser.uid];
+    const newVoteCount = newVotedBy.length;
+
+    const originalItems = [...items];
+    setItems(prevItems => prevItems.map(i =>
+      i.id === itemId ? { ...i, votes: newVoteCount, votedBy: newVotedBy } : i
+    ));
+
+    const success = await updateItineraryItemInTripDb(selectedTripId, itemId, { votes: newVoteCount, votedBy: newVotedBy });
 
     if (success) {
       toast({ title: "Voted!", description: `Your vote for "${itemToVoteOn.title}" has been counted.` });
-      // Optionally, refetch to ensure consistency, though optimistic update should handle UI
-      // fetchTripItineraryItems(); 
     } else {
       toast({ variant: "destructive", title: "Vote Failed", description: "Could not save your vote. Please try again." });
-      // Revert optimistic update
-      setItems(prevItems => prevItems.map(i => i.id === itemId ? { ...i, votes: itemToVoteOn.votes || 0 } : i));
+      setItems(originalItems);
     }
   };
-
 
   return (
     <div className="container mx-auto p-4 md:p-8">
@@ -297,11 +310,11 @@ export default function ItineraryPage() {
               <CardDescription className="mb-4">
                 Please select a trip from the dropdown above to view or create itinerary items.
               </CardDescription>
-               <Image 
-                src="https://picsum.photos/seed/select-trip-itinerary/400/250" 
-                alt="Select a trip" 
-                width={400} 
-                height={250} 
+               <Image
+                src="https://picsum.photos/seed/select-trip-itinerary/400/250"
+                alt="Select a trip"
+                width={400}
+                height={250}
                 className="mx-auto rounded-lg shadow-sm"
                 data-ai-hint="travel map"
               />
@@ -325,13 +338,13 @@ export default function ItineraryPage() {
               <CardDescription className="mb-4">
                 Start planning your amazing trip by adding your first activity or destination!
               </CardDescription>
-              <Image 
-                src="https://picsum.photos/seed/empty-itinerary-trip/400/250" 
-                alt="Empty Itinerary Illustration for Trip" 
-                width={400} 
-                height={250} 
+              <Image
+                src="https://picsum.photos/seed/empty-itinerary-trip/400/250"
+                alt="Empty Itinerary Illustration for Trip"
+                width={400}
+                height={250}
                 className="mx-auto rounded-lg shadow-sm"
-                data-ai-hint="travel planning" 
+                data-ai-hint="travel planning"
               />
             </CardContent>
          </Card>
@@ -339,7 +352,9 @@ export default function ItineraryPage() {
 
       {selectedTripId && !isLoadingItems && items.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {items.map(item => (
+          {items.map(item => {
+            const hasVoted = currentUser && item.votedBy?.includes(currentUser.uid);
+            return (
             <Card key={item.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col bg-card">
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -357,7 +372,7 @@ export default function ItineraryPage() {
                   <p className="flex items-center"><Clock className="mr-2 h-4 w-4 text-accent" /> {item.time}</p>
                   {item.notes && <p className="italic">Notes: {item.notes}</p>}
                 </div>
-                
+
                 <Separator className="my-4" />
 
                 <div>
@@ -389,10 +404,10 @@ export default function ItineraryPage() {
                       className="text-xs h-12 bg-background flex-grow"
                       rows={1}
                     />
-                    <Button 
-                      size="icon" 
-                      variant="ghost" 
-                      onClick={() => handleAddComment(item.id)} 
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleAddComment(item.id)}
                       className="text-primary hover:text-primary/80 h-12 w-12"
                       disabled={!currentUser || !newCommentTexts[item.id]?.trim()}
                       aria-label="Add comment"
@@ -407,14 +422,15 @@ export default function ItineraryPage() {
                       <span className="flex items-center"><Users className="mr-1 h-4 w-4" /> Votes: {item.votes || 0}</span>
                   </div>
                   <div className="mt-2 space-x-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-primary border-primary hover:bg-primary/10" 
+                      <Button
+                        variant={hasVoted ? "secondary" : "outline"}
+                        size="sm"
+                        className={hasVoted ? "text-secondary-foreground" : "text-primary border-primary hover:bg-primary/10"}
                         onClick={() => handleVote(item.id)}
-                        disabled={!currentUser}
+                        disabled={!currentUser || hasVoted}
                       >
-                        <ThumbsUp className="mr-1.5 h-3.5 w-3.5" /> Vote
+                        {hasVoted ? <ThumbsDown className="mr-1.5 h-3.5 w-3.5" /> : <ThumbsUp className="mr-1.5 h-3.5 w-3.5" />}
+                        {hasVoted ? "Voted" : "Vote"}
                       </Button>
                   </div>
                 </div>
@@ -432,10 +448,9 @@ export default function ItineraryPage() {
                 )}
               </CardFooter>
             </Card>
-          ))}
+          );})}
         </div>
       )}
     </div>
   );
 }
-
