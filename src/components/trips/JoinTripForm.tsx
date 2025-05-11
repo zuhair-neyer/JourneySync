@@ -38,8 +38,8 @@ export function JoinTripForm() {
       return;
     }
     if (!currentUser.displayName || currentUser.displayName.trim() === "") {
-      toast({ variant: "destructive", title: "Display Name Required", description: "Your display name is not set or is empty. Please update it in your account settings or wait a moment for it to sync before joining a trip." });
-      console.error("[JoinTripForm] handleSubmit: currentUser.displayName is missing or empty.");
+      toast({ variant: "destructive", title: "Display Name Not Set", description: "Your display name is syncing. Please wait a moment and try again, or update it in your account settings." });
+      console.error("[JoinTripForm] handleSubmit: currentUser.displayName is missing or empty. CurrentUser:", { uid: currentUser.uid, email: currentUser.email, displayName: currentUser.displayName});
       return;
     }
     if (!tripId.trim()) {

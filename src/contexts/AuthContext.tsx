@@ -52,10 +52,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("[AuthContext] onAuthStateChanged triggered. User:", user ? { uid: user.uid, email: user.email, displayName: user.displayName } : null);
-      // Ensure a new object is created to trigger state updates in consuming components
-      setCurrentUser(user ? { ...user } as FirebaseUser : null);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        console.log("[AuthContext] onAuthStateChanged: User found. UID:", user.uid, "Initial displayName:", user.displayName);
+        try {
+            // Attempt to reload to get the latest profile information including displayName
+            await user.reload();
+            console.log("[AuthContext] onAuthStateChanged: User reloaded. displayName after reload:", user.displayName);
+        } catch (reloadError: any) {
+            console.error("[AuthContext] onAuthStateChanged: Error reloading user:", reloadError.message);
+            // If reload fails (e.g., user signed out, network issue), proceed with current user object
+        }
+        setCurrentUser({ ...user } as FirebaseUser); // Ensure a new object is created
+      } else {
+        console.log("[AuthContext] onAuthStateChanged: User is null.");
+        setCurrentUser(null);
+      }
       setLoading(false);
     });
     return unsubscribe; 
@@ -77,28 +89,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await updateProfile(userInstance, { displayName: name });
         console.log("[AuthContext] signUp: updateProfile call completed for UID:", userInstance.uid);
         
+        // Critical: Reload the user instance to ensure local state reflects the updated profile
         await userInstance.reload(); 
-        console.log("[AuthContext] signUp: User reloaded (userInstance.reload() completed). UID:", userInstance.uid);
-        console.log("[AuthContext] signUp: DisplayName from userInstance *after* reload:", userInstance.displayName);
+        console.log("[AuthContext] signUp: userInstance reloaded. New displayName from userInstance:", userInstance.displayName);
         
-        setCurrentUser(userInstance ? { ...userInstance } as FirebaseUser : null); 
-        console.log("[AuthContext] signUp: setCurrentUser called with userInstance.displayName:", userInstance.displayName);
-        
-        const refreshedAuthCurrentUser = auth.currentUser;
-        if (refreshedAuthCurrentUser && refreshedAuthCurrentUser.uid === userInstance.uid) {
-            // It's possible auth.currentUser might not be the same instance as userInstance immediately.
-            // Reloading auth.currentUser if it exists and matches UID.
-            await refreshedAuthCurrentUser.reload();
-            console.log("[AuthContext] signUp: auth.currentUser (matching UID) reloaded. displayName:", refreshedAuthCurrentUser.displayName, "UID:", refreshedAuthCurrentUser.uid);
-            // Optionally, update context again if refreshedAuthCurrentUser is considered more canonical
-            // setCurrentUser({ ...refreshedAuthCurrentUser } as FirebaseUser); 
-        } else {
-            console.log("[AuthContext] signUp: auth.currentUser is null or different after trying to refresh it, relying on userInstance from credential.", "auth.currentUser UID:", refreshedAuthCurrentUser?.uid);
+        // Also ensure auth.currentUser is updated if it's being tracked directly elsewhere or for direct access
+        let finalUserToSet = userInstance;
+        if (auth.currentUser && auth.currentUser.uid === userInstance.uid) {
+            try {
+                await auth.currentUser.reload();
+                finalUserToSet = auth.currentUser; // Prioritize the reloaded auth.currentUser
+                console.log("[AuthContext] signUp: auth.currentUser reloaded. DisplayName:", auth.currentUser.displayName);
+            } catch (reloadError: any) {
+                 console.error("[AuthContext] signUp: Error reloading auth.currentUser:", reloadError.message);
+            }
         }
-
+        
+        setCurrentUser(finalUserToSet ? { ...finalUserToSet } as FirebaseUser : null); 
+        console.log("[AuthContext] signUp: setCurrentUser called with finalUserToSet.displayName:", finalUserToSet?.displayName);
+        
         toast({ title: "Success", description: "Account created successfully!" });
         router.push('/'); 
-        return userInstance; 
+        return finalUserToSet; 
       }
       console.warn("[AuthContext] signUp: userCredential.user was null after creation.");
       return null; 
@@ -122,11 +134,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistenceType);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log("[AuthContext] logIn: Login successful. User displayName:", userCredential.user?.displayName);
-      setCurrentUser(userCredential.user ? { ...userCredential.user } as FirebaseUser : null);
+      
+      // After login, displayName should be available from userCredential.user or after a reload
+      const loggedInUser = userCredential.user;
+      if (loggedInUser) {
+          try {
+              await loggedInUser.reload(); // Ensure latest profile data
+              console.log("[AuthContext] logIn: User reloaded. DisplayName:", loggedInUser.displayName);
+          } catch (reloadError: any) {
+              console.error("[AuthContext] logIn: Error reloading user after login:", reloadError.message);
+          }
+           setCurrentUser({ ...loggedInUser } as FirebaseUser);
+      } else {
+          setCurrentUser(null);
+      }
+      
       toast({ title: "Success", description: "Logged in successfully!" });
       router.push('/'); 
-      return userCredential.user;
+      return loggedInUser;
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
@@ -161,31 +186,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const updateUserProfile = async (name: string) => {
-    if (!auth.currentUser) {
+    const userToUpdate = auth.currentUser;
+    if (!userToUpdate) {
       setError("No user logged in.");
       toast({ variant: "destructive", title: "Error", description: "You must be logged in to update your profile." });
       return;
     }
     setLoading(true);
     setError(null);
-    const userToUpdate = auth.currentUser;
     console.log("[AuthContext] updateUserProfile: Attempting to update name to:", name, "for UID:", userToUpdate.uid, "Current displayName:", userToUpdate.displayName);
     try {
       await updateProfile(userToUpdate, { displayName: name });
+      // userToUpdate is a live reference to auth.currentUser. Reload it to get the latest data.
       await userToUpdate.reload();
       console.log("[AuthContext] updateUserProfile: Profile updated and reloaded. New displayName from reloaded userToUpdate:", userToUpdate.displayName);
       
       setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
       console.log("[AuthContext] updateUserProfile: setCurrentUser called. displayName from userToUpdate:", userToUpdate.displayName);
-
-      const refreshedAuthCurrentUser = auth.currentUser;
-      if (refreshedAuthCurrentUser && refreshedAuthCurrentUser.uid === userToUpdate.uid) {
-          await refreshedAuthCurrentUser.reload();
-          console.log("[AuthContext] updateUserProfile: auth.currentUser (matching UID) reloaded. displayName:", refreshedAuthCurrentUser.displayName);
-           // setCurrentUser({ ...refreshedAuthCurrentUser } as FirebaseUser);
-      } else {
-          console.log("[AuthContext] updateUserProfile: auth.currentUser is null or different after trying to refresh it.");
-      }
 
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
