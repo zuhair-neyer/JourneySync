@@ -1,7 +1,7 @@
 
 'use server';
 import { database } from '@/firebase/config';
-import type { Trip, TripMember, UserTripInfo, Expense } from '@/types';
+import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption } from '@/types';
 import { ref, push, set, get, child, update, serverTimestamp, remove } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
@@ -69,6 +69,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
         },
       },
       expenses: {},
+      polls: {}, // Initialize polls
     };
     await set(newTripRef, newTripData);
 
@@ -228,6 +229,7 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         members: processedMembers,
         createdBy: tripData.createdBy,
         expenses: tripData.expenses || {}, 
+        polls: tripData.polls || {},
       } as Trip;
 
       if (tripData.createdBy && !processedMembers[tripData.createdBy]) {
@@ -403,6 +405,95 @@ export async function deleteExpenseFromDb(tripId: string, expenseId: string): Pr
   }
 }
 
+// Poll related functions
+export async function addPollToTripDb(tripId: string, pollData: Omit<Poll, 'id' | 'tripId'>): Promise<string | null> {
+  if (!tripId) {
+    console.error("[tripService] addPollToTripDb: Trip ID is required.");
+    return null;
+  }
+  try {
+    const pollsRef = ref(database, `trips/${tripId}/polls`);
+    const newPollRef = push(pollsRef);
+    const pollId = newPollRef.key;
+
+    if (!pollId) {
+      console.error("[tripService] addPollToTripDb: Failed to generate poll ID.");
+      return null;
+    }
+    const pollToAdd: Omit<Poll, 'tripId'> = { ...pollData, id: pollId };
+    await set(newPollRef, pollToAdd);
+    return pollId;
+  } catch (error: any) {
+    console.error(`[tripService] addPollToTripDb: Error adding poll to trip ${tripId}:`, error.message);
+    return null;
+  }
+}
+
+export async function getPollsForTripFromDb(tripId: string): Promise<Poll[]> {
+  if (!tripId) {
+    return [];
+  }
+  try {
+    const pollsRef = ref(database, `trips/${tripId}/polls`);
+    const snapshot = await get(pollsRef);
+    if (snapshot.exists()) {
+      const pollsData = snapshot.val();
+      const pollsArray: Poll[] = Object.keys(pollsData).map(pollId => ({
+        ...pollsData[pollId],
+        id: pollId,
+        tripId: tripId,
+      }));
+      return pollsArray;
+    }
+    return [];
+  } catch (error: any) {
+    console.error(`[tripService] getPollsForTripFromDb: Error fetching polls for trip ${tripId}:`, error.message);
+    return [];
+  }
+}
+
+export async function updatePollInTripDb(tripId: string, pollId: string, pollData: Partial<Omit<Poll, 'id' | 'tripId'>>): Promise<boolean> {
+  if (!tripId || !pollId) {
+    console.error("[tripService] updatePollInTripDb: Trip ID and Poll ID are required.");
+    return false;
+  }
+  try {
+    // Ensure options are handled correctly: Firebase might not like undefined values in arrays.
+    // If `pollData.options` is provided, we assume it's the complete new array of options.
+    const updates: { [key: string]: any } = {};
+    if (pollData.question !== undefined) updates[`trips/${tripId}/polls/${pollId}/question`] = pollData.question;
+    if (pollData.options !== undefined) updates[`trips/${tripId}/polls/${pollId}/options`] = pollData.options;
+    // Do not update createdBy or createdAt
+    
+    if (Object.keys(updates).length === 0) {
+        console.warn("[tripService] updatePollInTripDb: No valid fields to update provided.");
+        return true; // No changes needed, considered a success.
+    }
+
+    await update(ref(database), updates);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] updatePollInTripDb: Error updating poll ${pollId} in trip ${tripId}:`, error.message);
+    return false;
+  }
+}
+
+export async function deletePollFromTripDb(tripId: string, pollId: string): Promise<boolean> {
+  if (!tripId || !pollId) {
+    console.error("[tripService] deletePollFromTripDb: Trip ID and Poll ID are required.");
+    return false;
+  }
+  try {
+    const pollRef = ref(database, `trips/${tripId}/polls/${pollId}`);
+    await remove(pollRef);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] deletePollFromTripDb: Error deleting poll ${pollId} from trip ${tripId}:`, error.message);
+    return false;
+  }
+}
+
+
 export async function deleteUserDataFromDb(userId: string): Promise<void> {
   console.log(`[tripService] deleteUserDataFromDb: Attempting to delete data for user ID: ${userId}`);
   if (!userId) {
@@ -420,14 +511,20 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
       const tripIds = Object.keys(userTripsData);
 
       // 2. For each trip, remove the user from the trip's members list
+      // Also, remove polls created by this user from those trips
       for (const tripId of tripIds) {
         updates[`/trips/${tripId}/members/${userId}`] = null; // Mark for deletion
-        // Note: More complex cleanup (e.g., reassigning createdBy if user was creator,
-        // handling expenses) is not done here for simplicity.
-        // Expenses paid by this user or where they were participants will remain,
-        // potentially pointing to a non-existent user.
-        // A more robust solution would iterate through expenses in these trips
-        // and anonymize or reattribute them.
+
+        // Remove polls created by the user in this trip
+        const tripPollsSnapshot = await get(ref(database, `trips/${tripId}/polls`));
+        if (tripPollsSnapshot.exists()) {
+            const polls = tripPollsSnapshot.val();
+            for (const pollId in polls) {
+                if (polls[pollId].createdBy === userId) {
+                    updates[`/trips/${tripId}/polls/${pollId}`] = null;
+                }
+            }
+        }
       }
     }
 
@@ -447,7 +544,6 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
     if (error.code === 'PERMISSION_DENIED') {
         console.error("[tripService] deleteUserDataFromDb: PERMISSION DENIED. Check Firebase Realtime Database rules for writing to '/trips' and '/users'.");
     }
-    // We might want to throw the error here so AuthContext knows DB cleanup failed partially
-    // and can inform the user or handle it differently. For now, just logging.
   }
 }
+
