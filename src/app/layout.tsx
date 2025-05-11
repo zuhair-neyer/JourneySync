@@ -10,27 +10,23 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { TripProvider } from '@/contexts/TripContext';
 import { PageContentSidebarTrigger } from '@/components/layout/page-content-sidebar-trigger';
 import { MobileAuthHeader } from '@/components/layout/mobile-auth-header';
+import { MobilePageContentSidebarTrigger } from '@/components/layout/mobile-page-content-sidebar-trigger';
 
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
-  display: 'swap', // Added display: 'swap'
+  display: 'swap',
 });
 
 const roboto_mono = Roboto_Mono({
   subsets: ['latin'],
   variable: '--font-roboto-mono',
-  display: 'swap', // Added display: 'swap'
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
   title: 'JourneySync - Collaborative Travel Planner',
   description: 'Plan your trips collaboratively with JourneySync. Features include shared itineraries, expense tracking, interactive maps, and smart recommendations.',
-  // Removing default favicon link, browser will request /favicon.ico by default.
-  // If a custom favicon is desired, it should be placed in public/favicon.ico
-  // icons: {
-  //   icon: '/favicon.ico', // Example, ensure file exists in public folder
-  // },
 };
 
 export default function RootLayout({
@@ -40,7 +36,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      {/* Removed any explicit link to /www/vscode-theme.css from head */}
       <body className={`${inter.variable} ${roboto_mono.variable} antialiased`}>
         <AuthProvider>
           <TripProvider>
@@ -62,6 +57,7 @@ export default function RootLayout({
               </Sidebar>
               <SidebarInset>
                 <PageContentSidebarTrigger />
+                <MobilePageContentSidebarTrigger />
                 <MobileAuthHeader />
                 {children}
               </SidebarInset>
