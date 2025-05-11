@@ -27,7 +27,7 @@ export default function ItineraryPage() {
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentItem, setCurrentItem] = useState<Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'createdBy' | 'createdAt' | 'comments'>>>({
-    title: '', description: '', location: '', date: '', time: '', notes: ''
+    title: '', description: '', location: '', date: '', time: '', notes: '', votes: 0
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newCommentTexts, setNewCommentTexts] = useState<Record<string, string>>({}); // { itemId: commentText }
@@ -40,7 +40,7 @@ export default function ItineraryPage() {
     setIsLoadingItems(true);
     try {
       const fetchedItems = await getItineraryItemsForTripFromDb(selectedTripId);
-      setItems(fetchedItems.map(item => ({ ...item, comments: item.comments || [] })));
+      setItems(fetchedItems.map(item => ({ ...item, comments: item.comments || [], votes: item.votes || 0 })));
     } catch (error) {
       console.error("Failed to fetch itinerary items:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load itinerary for this trip." });
@@ -78,8 +78,8 @@ export default function ItineraryPage() {
       notes: currentItem.notes || '',
       createdBy: currentUser.uid,
       createdAt: Date.now(),
-      votes: 0,
-      comments: [], // Initialize with empty comments array
+      votes: currentItem.votes || 0,
+      comments: [], 
     };
     
     let success = false;
@@ -91,7 +91,7 @@ export default function ItineraryPage() {
         date: currentItem.date,
         time: currentItem.time,
         notes: currentItem.notes,
-        votes: items.find(i => i.id === editingId)?.votes || 0, // Preserve existing votes
+        votes: items.find(i => i.id === editingId)?.votes || 0, 
       };
       success = await updateItineraryItemInTripDb(selectedTripId, editingId, updateData);
       if (success) toast({ title: "Success", description: "Itinerary item updated." });
@@ -106,7 +106,7 @@ export default function ItineraryPage() {
     if (success) {
       fetchTripItineraryItems();
       setIsDialogOpen(false);
-      setCurrentItem({ title: '', description: '', location: '', date: '', time: '', notes: '' });
+      setCurrentItem({ title: '', description: '', location: '', date: '', time: '', notes: '', votes: 0 });
       setEditingId(null);
     } else {
       toast({ variant: "destructive", title: "Error", description: `Failed to ${editingId ? 'update' : 'add'} itinerary item.` });
@@ -121,6 +121,7 @@ export default function ItineraryPage() {
       date: item.date,
       time: item.time,
       notes: item.notes,
+      votes: item.votes || 0,
     });
     setEditingId(item.id);
     setIsDialogOpen(true);
@@ -149,7 +150,7 @@ export default function ItineraryPage() {
       toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip first to add an itinerary item." });
       return;
     }
-    setCurrentItem({ title: '', description: '', location: '', date: new Date().toISOString().split('T')[0], time: '12:00', notes: ''});
+    setCurrentItem({ title: '', description: '', location: '', date: new Date().toISOString().split('T')[0], time: '12:00', notes: '', votes: 0});
     setEditingId(null);
     setIsDialogOpen(true);
   };
@@ -176,7 +177,6 @@ export default function ItineraryPage() {
       createdAt: Date.now(),
     };
     
-    // Generate a unique ID for the comment (client-side for array storage)
     const commentWithId: ItineraryComment = {
         ...newComment,
         id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -186,8 +186,8 @@ export default function ItineraryPage() {
 
     if (success) {
       toast({ title: "Success", description: "Comment added." });
-      setNewCommentTexts(prev => ({ ...prev, [itemId]: '' })); // Clear input
-      fetchTripItineraryItems(); // Refetch to show new comment
+      setNewCommentTexts(prev => ({ ...prev, [itemId]: '' })); 
+      fetchTripItineraryItems(); 
     } else {
       toast({ variant: "destructive", title: "Error", description: "Failed to add comment." });
     }

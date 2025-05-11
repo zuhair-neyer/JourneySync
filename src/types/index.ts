@@ -41,8 +41,8 @@ export interface ItineraryItem {
   notes?: string;
   createdBy: string; // UID of the user who created the item
   createdAt: number; // Timestamp of creation
-  votes?: number; 
-  comments: ItineraryComment[]; // Changed from string[] to ItineraryComment[] and made non-optional
+  votes: number; // Added votes field, ensuring it's always a number
+  comments: ItineraryComment[]; 
 }
 
 export interface Trip {
@@ -81,3 +81,4 @@ export interface Expense {
   participantIds: string[];
   tripId: string; 
 }
+

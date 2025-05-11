@@ -507,11 +507,12 @@ export async function addItineraryItemToTripDb(tripId: string, itemData: Omit<It
       console.error("[tripService] addItineraryItemToTripDb: Failed to generate itinerary item ID.");
       return null;
     }
-    // Ensure comments array is initialized
+
     const itemToAdd: Omit<ItineraryItem, 'tripId'> = { 
         ...itemData, 
         id: itemId,
-        comments: itemData.comments || [], // Ensure comments is an array
+        votes: itemData.votes || 0, // Initialize votes to 0 if not provided
+        comments: itemData.comments || [], 
     };
     await set(newItemRef, itemToAdd);
     return itemId;
@@ -534,7 +535,8 @@ export async function getItineraryItemsForTripFromDb(tripId: string): Promise<It
         ...itemsData[itemId],
         id: itemId,
         tripId: tripId,
-        comments: itemsData[itemId].comments || [], // Ensure comments is an array
+        votes: itemsData[itemId].votes || 0, // Ensure votes is a number, default to 0
+        comments: itemsData[itemId].comments || [], 
       }));
       return itemsArray;
     }
@@ -560,7 +562,7 @@ export async function updateItineraryItemInTripDb(tripId: string, itemId: string
     if (itemData.date !== undefined) updates[`${basePath}/date`] = itemData.date;
     if (itemData.time !== undefined) updates[`${basePath}/time`] = itemData.time;
     if (itemData.notes !== undefined) updates[`${basePath}/notes`] = itemData.notes;
-    if (itemData.votes !== undefined) updates[`${basePath}/votes`] = itemData.votes;
+    if (itemData.votes !== undefined) updates[`${basePath}/votes`] = itemData.votes; // Preserve votes
     // Comments are handled by addCommentToItineraryItemDb
 
     if (Object.keys(updates).length === 0) {
@@ -685,3 +687,4 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
     }
   }
 }
+
