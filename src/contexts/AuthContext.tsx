@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { ReactNode, Dispatch, SetStateAction } from 'react';
@@ -54,54 +53,64 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      // Ensure a new object reference for state update if user exists
+      console.log("[AuthContext] onAuthStateChanged triggered. User:", user ? { uid: user.uid, email: user.email, displayName: user.displayName } : null);
       setCurrentUser(user ? { ...user } as FirebaseUser : null);
       setLoading(false);
     });
-    return unsubscribe; // Cleanup subscription on unmount
+    return unsubscribe; 
   }, []);
 
   const signUp = async (email: string, password: string, name: string): Promise<FirebaseUser | null> => {
     setLoading(true);
     setError(null);
+    console.log("[AuthContext] signUp: Starting with email:", email, "name:", name);
     try {
       await setPersistence(auth, browserLocalPersistence);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       if (userCredential.user) {
         const userToUpdate = userCredential.user;
+        console.log("[AuthContext] signUp: User created. UID:", userToUpdate.uid, "Current displayName:", userToUpdate.displayName);
+        console.log("[AuthContext] signUp: Attempting to update profile with name:", name);
+        
         await updateProfile(userToUpdate, {
           displayName: name,
         });
-        // Reload the user to ensure the profile update (displayName) is reflected in auth.currentUser and userToUpdate
-        await userToUpdate.reload(); 
+        console.log("[AuthContext] signUp: updateProfile call completed.");
         
-        // Ensure a new object reference for state update using the reloaded user object
+        await userToUpdate.reload(); 
+        console.log("[AuthContext] signUp: User reloaded. New displayName from userToUpdate object:", userToUpdate.displayName);
+        
         setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
+        console.log("[AuthContext] signUp: currentUser state updated in context. New displayName:", auth.currentUser?.displayName);
         
         toast({ title: "Success", description: "Account created successfully!" });
         router.push('/'); 
-        return userToUpdate; // Return the user object that should now have displayName
+        return userToUpdate;
       }
-      return null; // Should not happen if userCredential.user exists
+      console.warn("[AuthContext] signUp: userCredential.user was null after creation.");
+      return null; 
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
       toast({ variant: "destructive", title: "Sign up failed", description: authError.message });
+      console.error("[AuthContext] signUp: Error during signup:", authError);
       return null;
     } finally {
       setLoading(false);
+      console.log("[AuthContext] signUp: Finished.");
     }
   };
 
   const logIn = async (email: string, password: string, rememberMe: boolean = true): Promise<FirebaseUser | null> => {
     setLoading(true);
     setError(null);
+    console.log("[AuthContext] logIn: Attempting login for email:", email);
     try {
       const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistenceType);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // Ensure a new object reference for state update
+      console.log("[AuthContext] logIn: Login successful. User displayName:", userCredential.user?.displayName);
       setCurrentUser(userCredential.user ? { ...userCredential.user } as FirebaseUser : null);
       toast({ title: "Success", description: "Logged in successfully!" });
       router.push('/'); 
@@ -110,26 +119,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const authError = e as AuthError;
       setError(authError.message);
       toast({ variant: "destructive", title: "Login failed", description: authError.message });
+      console.error("[AuthContext] logIn: Error during login:", authError);
       return null;
     } finally {
       setLoading(false);
+      console.log("[AuthContext] logIn: Finished.");
     }
   };
 
   const logOut = async () => {
     setLoading(true);
     setError(null);
+    console.log("[AuthContext] logOut: Attempting logout.");
     try {
       await firebaseSignOut(auth);
       setCurrentUser(null);
       toast({ title: "Success", description: "Logged out successfully." });
       router.push('/login'); 
+      console.log("[AuthContext] logOut: Logout successful.");
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
       toast({ variant: "destructive", title: "Logout failed", description: authError.message });
+      console.error("[AuthContext] logOut: Error during logout:", authError);
     } finally {
       setLoading(false);
+      console.log("[AuthContext] logOut: Finished.");
     }
   };
 
@@ -141,21 +156,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
     setLoading(true);
     setError(null);
+    console.log("[AuthContext] updateUserProfile: Attempting to update name to:", name);
     try {
       const userToUpdate = auth.currentUser;
       await updateProfile(userToUpdate, { displayName: name });
-      // Reload the user to ensure the profile update (displayName) is reflected
       await userToUpdate.reload();
-      // Update local currentUser state by re-fetching from auth.currentUser (which is userToUpdate after reload)
-      // Ensure a new object reference for state update
+      console.log("[AuthContext] updateUserProfile: Profile updated and reloaded. New displayName:", userToUpdate.displayName);
       setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null);
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
       toast({ variant: "destructive", title: "Profile update failed", description: authError.message });
+      console.error("[AuthContext] updateUserProfile: Error:", authError);
     } finally {
       setLoading(false);
+      console.log("[AuthContext] updateUserProfile: Finished.");
     }
   };
 
@@ -167,15 +183,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
     setLoading(true);
     setError(null);
+    console.log("[AuthContext] updateUserPassword: Attempting to update password.");
     try {
       await firebaseUpdatePassword(auth.currentUser, newPassword);
       toast({ title: "Success", description: "Password updated successfully! Please log in again if prompted." });
+      console.log("[AuthContext] updateUserPassword: Password update successful.");
     } catch (e) {
       const authError = e as AuthError;
       setError(authError.message);
       toast({ variant: "destructive", title: "Password update failed", description: authError.message });
+      console.error("[AuthContext] updateUserPassword: Error:", authError);
     } finally {
       setLoading(false);
+      console.log("[AuthContext] updateUserPassword: Finished.");
     }
   };
 
@@ -194,4 +214,3 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-

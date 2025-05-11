@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react'; // Added useEffect
+import React, { useState, useEffect } from 'react'; 
 import { useAuth } from '@/contexts/AuthContext';
 import { createTripInDb } from '@/firebase/tripService';
 import { useTripContext } from '@/contexts/TripContext';
@@ -21,13 +21,13 @@ export function CreateTripForm() {
 
   useEffect(() => {
     if (currentUser) {
-      console.log("CreateTripForm currentUser updated:", { 
+      console.log("[CreateTripForm] currentUser updated in useEffect:", { 
         uid: currentUser.uid, 
         displayName: currentUser.displayName, 
         email: currentUser.email 
       });
     } else {
-      console.log("CreateTripForm currentUser is null");
+      console.log("[CreateTripForm] currentUser is null in useEffect");
     }
   }, [currentUser]);
 
@@ -35,13 +35,17 @@ export function CreateTripForm() {
     e.preventDefault();
     if (!currentUser) {
       toast({ variant: "destructive", title: "Error", description: "You must be logged in to create a trip." });
-      console.error("CreateTripForm: handleSubmit called without currentUser.");
+      console.error("[CreateTripForm] handleSubmit: currentUser is null.");
       return;
     }
     if (!tripName.trim()) {
       toast({ variant: "destructive", title: "Error", description: "Trip name cannot be empty." });
       return;
     }
+
+    console.log("[CreateTripForm] handleSubmit: currentUser.displayName AT POINT OF SUBMISSION:", currentUser.displayName);
+    console.log("[CreateTripForm] handleSubmit: Full currentUser object AT POINT OF SUBMISSION:", JSON.stringify({uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email}));
+
 
     setIsLoading(true);
     setCreatedTripId(null);
@@ -51,7 +55,7 @@ export function CreateTripForm() {
       displayName: currentUser.displayName,
       email: currentUser.email,
     };
-    console.log("CreateTripForm: basicUserInfo being sent to createTripInDb:", basicUserInfo);
+    console.log("[CreateTripForm] handleSubmit: basicUserInfo being sent to createTripInDb:", basicUserInfo);
 
     const newTripId = await createTripInDb(tripName, basicUserInfo);
     setIsLoading(false);
@@ -63,8 +67,7 @@ export function CreateTripForm() {
       refreshUserTrips();
     } else {
       toast({ variant: "destructive", title: "Error", description: "Failed to create trip. Please check server logs for details." });
-      // The detailed error is already logged in tripService, this client-side log points to checking server logs.
-      console.error("Client-side: createTripInDb returned null. This usually indicates a server-side error with Firebase (e.g., permission denied, misconfiguration). Check your Next.js server console logs for detailed Firebase error messages from 'tripService.ts'.");
+      console.error("[CreateTripForm] Client-side: createTripInDb returned null. This usually indicates a server-side error with Firebase (e.g., permission denied, misconfiguration). Check your Next.js server console logs for detailed Firebase error messages from 'tripService.ts'.");
     }
   };
 
