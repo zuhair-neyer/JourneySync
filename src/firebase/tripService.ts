@@ -1,3 +1,4 @@
+
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo } from '@/types';
@@ -43,7 +44,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     return null;
   }
    if (!userInfo.displayName || userInfo.displayName.trim() === "") {
-    console.warn("[tripService] createTripInDb: userInfo.displayName is missing or empty. Member name will be generated based on fallback logic.");
+    console.warn("[tripService] createTripInDb: userInfo.displayName is missing or empty. Member name will be generated based on fallback logic. UserInfo:", JSON.stringify(userInfo));
   }
 
   try {
@@ -57,7 +58,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     }
     
     const memberName = generateMemberName(userInfo);
-    console.log("[tripService] createTripInDb: Generated memberName for trip creator:", memberName, "from userInfo.displayName:", userInfo.displayName, "and email:", userInfo.email);
+    console.log("[tripService] createTripInDb: Generated memberName for trip creator:", memberName);
 
 
     const newTripData: Omit<Trip, 'id'> = {
@@ -82,7 +83,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
     };
     await set(userTripRef, userTripInfoData);
 
-    console.log("[tripService] createTripInDb: SUCCEEDED for tripId:", tripId);
+    console.log("[tripService] createTripInDb: SUCCEEDED for tripId:", tripId, "with memberName:", memberName);
     return tripId;
   } catch (error: any) {
     console.error("[tripService] createTripInDb: ERROR creating trip:", error.message, "(Code:", error.code || 'N/A', ")");
@@ -106,7 +107,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     return false;
   }
   if (!userInfo.displayName || userInfo.displayName.trim() === "") {
-    console.warn("[tripService] joinTripInDb: userInfo.displayName is missing or empty. Member name will be generated based on fallback logic.");
+    console.warn("[tripService] joinTripInDb: userInfo.displayName is missing or empty. Member name will be generated based on fallback logic. UserInfo:", JSON.stringify(userInfo));
   }
 
   try {
@@ -121,7 +122,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     const tripData = tripSnapshot.val() as Omit<Trip, 'id'> & { id?: string }; 
 
     const memberName = generateMemberName(userInfo); 
-    console.log("[tripService] joinTripInDb: Generated memberName for joining user:", memberName, "from userInfo.displayName:", userInfo.displayName, "and email:", userInfo.email);
+    console.log("[tripService] joinTripInDb: Generated memberName for joining user:", memberName);
 
     if (tripData.members && tripData.members[userInfo.uid]) {
       console.log("[tripService] joinTripInDb: User is already a member of this trip:", tripId);
@@ -174,7 +175,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
     };
     
     await update(ref(database), updates);
-    console.log("[tripService] joinTripInDb: Successfully joined trip:", tripId);
+    console.log("[tripService] joinTripInDb: Successfully joined trip:", tripId, "as memberName:", memberName);
     return true;
   } catch (error: any) {
     console.error("[tripService] joinTripInDb: ERROR joining trip:", error.message, "(Code:", error.code || 'N/A', ")");
@@ -242,3 +243,4 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     return null;
   }
 }
+

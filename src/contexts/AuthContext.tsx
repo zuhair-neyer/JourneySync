@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ReactNode, Dispatch, SetStateAction } from 'react';
@@ -201,8 +202,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await userToUpdate.reload();
       console.log("[AuthContext] updateUserProfile: Profile updated and reloaded. New displayName from reloaded userToUpdate:", userToUpdate.displayName);
       
-      setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null); // Important: Create new object
-      console.log("[AuthContext] updateUserProfile: setCurrentUser called. displayName from userToUpdate:", userToUpdate.displayName, "UID:", userToUpdate.uid);
+      const reloadedAuthCurrentUser = auth.currentUser;
+      if (reloadedAuthCurrentUser && reloadedAuthCurrentUser.uid === userToUpdate.uid) {
+        setCurrentUser({ ...reloadedAuthCurrentUser } as FirebaseUser);
+        console.log("[AuthContext] updateUserProfile: setCurrentUser called with reloaded auth.currentUser. displayName:", reloadedAuthCurrentUser.displayName, "UID:", reloadedAuthCurrentUser.uid);
+      } else {
+        setCurrentUser(userToUpdate ? { ...userToUpdate } as FirebaseUser : null); 
+        console.log("[AuthContext] updateUserProfile: setCurrentUser called with userToUpdate. displayName:", userToUpdate.displayName, "UID:", userToUpdate.uid);
+      }
 
       toast({ title: "Success", description: "Profile updated successfully!" });
     } catch (e) {
@@ -255,3 +262,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
