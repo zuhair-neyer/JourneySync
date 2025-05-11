@@ -1,4 +1,3 @@
-
 'use server';
 import { database } from '@/firebase/config';
 import type { Trip, TripMember, UserTripInfo } from '@/types';
@@ -33,18 +32,16 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       return null;
     }
     
-    const currentTime = Date.now();
-
     const newTripData: Omit<Trip, 'id'> = {
       name: tripName,
       createdBy: userInfo.uid,
-      createdAt: currentTime,
+      createdAt: serverTimestamp() as any, // Firebase server timestamp
       members: {
         [userInfo.uid]: {
           uid: userInfo.uid,
           name: userInfo.displayName ?? "Anonymous User", 
           email: userInfo.email,
-          joinedAt: currentTime,
+          joinedAt: serverTimestamp() as any, // Firebase server timestamp
         },
       },
     };
@@ -107,7 +104,7 @@ export async function joinTripInDb(tripId: string, userInfo: BasicUserInfo): Pro
       uid: userInfo.uid,
       name: userInfo.displayName ?? "Anonymous User",
       email: userInfo.email,
-      joinedAt: Date.now(),
+      joinedAt: serverTimestamp() as any, // Firebase server timestamp
     };
 
     if (!tripData.name) {
@@ -189,4 +186,3 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
     return null;
   }
 }
-
