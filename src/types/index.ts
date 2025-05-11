@@ -22,3 +22,15 @@ export interface UserTripInfo { // Stored under /users/{uid}/trips/{tripId}
   name: string;
   role: 'creator' | 'member';
 }
+
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  currency: string;
+  category: string;
+  paidByUserId: string;
+  date: string;
+  participantIds: string[];
+  tripId: string; // Added tripId
+}

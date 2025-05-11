@@ -8,30 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // DialogTrigger removed as it's not directly used for main dialog
-import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, Download, Bell, CreditCard, CheckCircle, Send, Target, PieChart as LucidePieChartIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PlusCircle, Edit2, Trash2, Users, DollarSign, CalendarDays, Landmark, Car, Utensils, Palette, AlertTriangle, Download, Bell, CreditCard, CheckCircle, Send, Target, PieChart as LucidePieChartIcon, Filter } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
+import { useTripContext } from '@/contexts/TripContext';
 import Image from 'next/image';
 import { Pie, Cell, PieLabelRenderProps, PieChart, ResponsiveContainer, Legend } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
+import type { Expense } from '@/types'; // Import updated Expense type
 
 interface User {
   id: string;
   name: string;
   email?: string | null;
-}
-
-interface Expense {
-  id: string;
-  description: string;
-  amount: number;
-  currency: string;
-  category: string;
-  paidByUserId: string;
-  date: string;
-  participantIds: string[];
 }
 
 interface Balance {
@@ -67,9 +58,13 @@ const categoryColors: { [key: string]: string } = {
 
 export default function ExpensesPage() {
   const { currentUser } = useAuth();
+  const { userTrips, selectedTripId, setSelectedTripId, isLoadingUserTrips, selectedTrip } = useTripContext();
   const { toast } = useToast();
+  
   const [users, setUsers] = useState<User[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]); // Stores all expenses across trips
+  const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]); // Expenses for the selected trip
+  
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
   const [currentExpense, setCurrentExpense] = useState<Partial<Expense>>({ currency: 'USD', category: expenseCategories[0] });
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
@@ -81,7 +76,7 @@ export default function ExpensesPage() {
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
   const [budgetInput, setBudgetInput] = useState<string>("");
 
-
+  // Initialize users and mock expenses
   useEffect(() => {
     const mockUsers: User[] = [
       { id: 'user2', name: 'Alice Wonderland' },
@@ -90,21 +85,40 @@ export default function ExpensesPage() {
     if (currentUser) {
       setUsers([{ id: currentUser.uid, name: currentUser.displayName || currentUser.email || 'Current User', email: currentUser.email }, ...mockUsers]);
     } else {
+      // Fallback for when currentUser is not yet loaded or available
       setUsers([{ id: 'user1', name: 'Guest User (You)'}, ...mockUsers]);
     }
     
     const initialExpenses: Expense[] = [
-        { id: '1', description: 'Group Dinner', amount: 120, currency: 'USD', category: 'Food', paidByUserId: currentUser?.uid || 'user1', date: '2024-07-20', participantIds: [currentUser?.uid || 'user1', 'user2', 'user3'] },
-        { id: '2', description: 'Museum Tickets', amount: 45, currency: 'USD', category: 'Activities', paidByUserId: 'user2', date: '2024-07-21', participantIds: [currentUser?.uid || 'user1', 'user2'] },
+        { id: '1', description: 'Group Dinner', amount: 120, currency: 'USD', category: 'Food', paidByUserId: currentUser?.uid || 'user1', date: '2024-07-20', participantIds: [currentUser?.uid || 'user1', 'user2', 'user3'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
+        { id: '2', description: 'Museum Tickets', amount: 45, currency: 'USD', category: 'Activities', paidByUserId: 'user2', date: '2024-07-21', participantIds: [currentUser?.uid || 'user1', 'user2'], tripId: userTrips.length > 0 ? userTrips[0].id : 'trip1' },
+        { id: '3', description: 'Souvenirs', amount: 60, currency: 'EUR', category: 'Shopping', paidByUserId: 'user3', date: '2024-07-22', participantIds: ['user3', currentUser?.uid || 'user1'], tripId: userTrips.length > 1 ? userTrips[1].id : 'trip2' }, // Example for a second trip
     ];
-    setExpenses(initialExpenses);
-    // Simulate loading saved budget
-    // setTripBudget(1000); 
-    // setBudgetInput("1000");
-  }, [currentUser]);
+    setAllExpenses(initialExpenses);
+  }, [currentUser, userTrips]); // Added userTrips dependency to use actual trip IDs if available
+
+  // Filter expenses whenever selectedTripId or allExpenses change
+  useEffect(() => {
+    if (selectedTripId) {
+      setFilteredExpenses(allExpenses.filter(exp => exp.tripId === selectedTripId));
+    } else {
+      setFilteredExpenses([]); // Or show all if no trip selected: setFilteredExpenses(allExpenses)
+    }
+  }, [selectedTripId, allExpenses]);
+
 
   const calculateBalancesAndTotal = useCallback(() => {
-    if (users.length === 0) return;
+    const expensesToProcess = filteredExpenses; // Use filtered expenses
+    if (users.length === 0 || expensesToProcess.length === 0 && !selectedTripId) {
+      setBalances([]);
+      setTotalGroupExpense(0);
+      return;
+    }
+     if (expensesToProcess.length === 0 && selectedTripId) {
+      setBalances([]); // Clear balances if trip selected but no expenses for it
+      setTotalGroupExpense(0); // Clear total if trip selected but no expenses for it
+    }
+
 
     let newTotalGroupExpense = 0;
     const userExpensesSummary: { [userId: string]: { paid: number; share: number } } = {};
@@ -113,7 +127,7 @@ export default function ExpensesPage() {
       userExpensesSummary[user.id] = { paid: 0, share: 0 };
     });
 
-    expenses.forEach(expense => {
+    expensesToProcess.forEach(expense => {
       newTotalGroupExpense += expense.amount;
       if (userExpensesSummary[expense.paidByUserId]) {
         userExpensesSummary[expense.paidByUserId].paid += expense.amount;
@@ -141,21 +155,21 @@ export default function ExpensesPage() {
 
     setBalances(newBalances);
     setTotalGroupExpense(newTotalGroupExpense);
-  }, [expenses, users, settledStatus]);
+  }, [filteredExpenses, users, settledStatus, selectedTripId]); // Depend on filteredExpenses
 
   useEffect(() => {
     calculateBalancesAndTotal();
-  }, [expenses, users, calculateBalancesAndTotal, settledStatus]);
+  }, [filteredExpenses, users, settledStatus, calculateBalancesAndTotal]);
 
   useEffect(() => {
-    if (tripBudget !== null && totalGroupExpense > tripBudget) {
+    if (tripBudget !== null && totalGroupExpense > tripBudget && selectedTripId) {
       toast({
         variant: "destructive",
         title: "Budget Exceeded",
-        description: `The group has spent ${totalGroupExpense.toFixed(2)}, exceeding the budget of ${tripBudget.toFixed(2)}.`,
+        description: `The group has spent ${totalGroupExpense.toFixed(2)} for trip "${selectedTrip?.name}", exceeding the budget of ${tripBudget.toFixed(2)}.`,
       });
     }
-  }, [totalGroupExpense, tripBudget, toast]);
+  }, [totalGroupExpense, tripBudget, toast, selectedTripId, selectedTrip?.name]);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -179,16 +193,22 @@ export default function ExpensesPage() {
   };
 
   const handleSubmitExpense = () => {
+    if (!selectedTripId) {
+      toast({ variant: "destructive", title: "Error", description: "Please select a trip before adding an expense." });
+      return;
+    }
     if (!currentExpense.description || !currentExpense.amount || !currentExpense.paidByUserId || !currentExpense.date || !currentExpense.category || !currentExpense.currency || (currentExpense.participantIds || []).length === 0) {
       toast({ variant: "destructive", title: "Error", description: "Please fill all required fields and select participants." });
       return;
     }
 
+    const expenseWithTripId = { ...currentExpense, tripId: selectedTripId } as Expense;
+
     if (editingExpenseId) {
-      setExpenses(expenses.map(exp => exp.id === editingExpenseId ? { ...exp, ...currentExpense } as Expense : exp));
+      setAllExpenses(allExpenses.map(exp => exp.id === editingExpenseId ? expenseWithTripId : exp));
       toast({ title: "Success", description: "Expense updated." });
     } else {
-      setExpenses([...expenses, { ...currentExpense, id: Date.now().toString() } as Expense]);
+      setAllExpenses([...allExpenses, { ...expenseWithTripId, id: Date.now().toString() }]);
       toast({ title: "Success", description: "Expense added." });
     }
     setIsExpenseDialogOpen(false);
@@ -203,12 +223,16 @@ export default function ExpensesPage() {
   };
 
   const handleDeleteExpense = (id: string) => {
-    setExpenses(expenses.filter(exp => exp.id !== id));
+    setAllExpenses(allExpenses.filter(exp => exp.id !== id));
     toast({ title: "Success", description: "Expense deleted." });
   };
 
   const openNewExpenseDialog = () => {
-    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id), date: new Date().toISOString().split('T')[0] });
+     if (!selectedTripId) {
+      toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip first to add an expense to it." });
+      return;
+    }
+    setCurrentExpense({ currency: 'USD', category: expenseCategories[0], participantIds: users.map(u => u.id), date: new Date().toISOString().split('T')[0], tripId: selectedTripId });
     setEditingExpenseId(null);
     setIsExpenseDialogOpen(true);
   };
@@ -216,10 +240,14 @@ export default function ExpensesPage() {
   const handleMarkAsSettled = (userIdToSettle: string) => {
     setSettledStatus(prev => ({ ...prev, [userIdToSettle]: true }));
     const userName = users.find(u => u.id === userIdToSettle)?.name || 'User';
-    toast({ title: "Success", description: `${userName}'s balance marked as settled.` });
+    toast({ title: "Success", description: `${userName}'s balance marked as settled for trip "${selectedTrip?.name}".` });
   };
 
   const handleOpenBudgetDialog = () => {
+    if (!selectedTripId) {
+      toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip to set its budget." });
+      return;
+    }
     setBudgetInput(tripBudget?.toString() || "");
     setIsBudgetDialogOpen(true);
   };
@@ -230,22 +258,23 @@ export default function ExpensesPage() {
       toast({ variant: "destructive", title: "Invalid Budget", description: "Please enter a valid positive number for the budget." });
       return;
     }
-    setTripBudget(newBudget);
-    toast({ title: "Success", description: `Trip budget set to ${newBudget.toFixed(2)}.` });
+    setTripBudget(newBudget); // In a real app, this would be per-trip and saved to DB
+    toast({ title: "Success", description: `Budget for trip "${selectedTrip?.name}" set to ${newBudget.toFixed(2)}.` });
     setIsBudgetDialogOpen(false);
   };
 
   const handleDownloadReport = () => {
-    toast({ title: "Feature Coming Soon", description: "A downloadable expense report will be available in a future update." });
-    // Placeholder for actual report generation logic
-    // Example: const reportData = generateReport(expenses, balances, users, tripBudget);
-    // downloadFile(reportData, 'expense_report.csv', 'text/csv');
+    if (!selectedTripId) {
+      toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip to download its report." });
+      return;
+    }
+    toast({ title: "Feature Coming Soon", description: `A downloadable expense report for trip "${selectedTrip?.name}" will be available in a future update.` });
   };
 
 
   const expenseDataForChart = expenseCategories.map(category => ({
     name: category,
-    total: expenses
+    total: filteredExpenses // Use filtered expenses
       .filter(exp => exp.category === category)
       .reduce((sum, exp) => sum + exp.amount, 0),
     fill: categoryColors[category] || 'hsl(var(--muted))',
@@ -271,15 +300,45 @@ export default function ExpensesPage() {
           <DollarSign className="w-10 h-10 text-primary mr-3" />
           <h1 className="text-3xl font-bold text-primary">Expense Tracking</h1>
         </div>
-        <Button onClick={openNewExpenseDialog} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+        <Button onClick={openNewExpenseDialog} className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={!selectedTripId}>
           <PlusCircle className="mr-2 h-5 w-5" /> Add Expense
         </Button>
       </header>
 
+       <Card className="mb-8 shadow-md bg-card">
+        <CardHeader>
+          <CardTitle className="text-lg text-primary flex items-center"><Filter className="mr-2 h-5 w-5" /> Select Trip for Expenses</CardTitle>
+          <CardDescription>Manage expenses for a specific trip.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingUserTrips ? (
+            <p className="text-muted-foreground">Loading your trips...</p>
+          ) : userTrips.length > 0 ? (
+            <Select
+              value={selectedTripId || ""}
+              onValueChange={(value) => setSelectedTripId(value || null)}
+            >
+              <SelectTrigger className="w-full md:w-[300px] bg-background">
+                <SelectValue placeholder="Select a trip" />
+              </SelectTrigger>
+              <SelectContent>
+                {userTrips.map((trip) => (
+                  <SelectItem key={trip.id} value={trip.id}>
+                    {trip.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-muted-foreground">No trips found. Please create or join a trip on the 'My Trips' page.</p>
+          )}
+        </CardContent>
+      </Card>
+
       <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
         <DialogContent className="sm:max-w-lg bg-card">
           <DialogHeader>
-            <DialogTitle className="text-primary">{editingExpenseId ? 'Edit' : 'Add New'} Expense</DialogTitle>
+            <DialogTitle className="text-primary">{editingExpenseId ? 'Edit' : 'Add New'} Expense for {selectedTrip?.name || "Selected Trip"}</DialogTitle>
             <DialogDescription>
               {editingExpenseId ? 'Update the details for this expense.' : 'Fill in the details for the new expense.'}
             </DialogDescription>
@@ -360,13 +419,13 @@ export default function ExpensesPage() {
       <Dialog open={isBudgetDialogOpen} onOpenChange={setIsBudgetDialogOpen}>
         <DialogContent className="sm:max-w-md bg-card">
             <DialogHeader>
-                <DialogTitle className="text-primary">Set Trip Budget</DialogTitle>
+                <DialogTitle className="text-primary">Set Budget for {selectedTrip?.name || "Trip"}</DialogTitle>
                 <DialogDescription>
                     Enter the total budget for this trip. You'll be alerted if spending exceeds this amount.
                 </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-                <Label htmlFor="budgetAmount">Budget Amount ({expenses.length > 0 ? expenses[0].currency : 'USD'})</Label>
+                <Label htmlFor="budgetAmount">Budget Amount ({filteredExpenses.length > 0 ? filteredExpenses[0].currency : 'USD'})</Label>
                 <Input 
                     id="budgetAmount" 
                     type="number" 
@@ -383,188 +442,211 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <Card className="shadow-md bg-card">
-          <CardHeader>
-            <CardTitle className="text-lg text-primary">Total Group Expenses</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{totalGroupExpense.toFixed(2)} <span className="text-sm text-muted-foreground">{expenses.length > 0 ? expenses[0].currency : 'USD'}</span></p>
-            <p className="text-xs text-muted-foreground"> (Assumes all expenses are in the first expense's currency or manually converted by user)</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md bg-card">
-            <CardHeader>
-                <CardTitle className="text-lg text-primary flex items-center"><Target className="mr-2"/>Trip Budget</CardTitle>
-            </CardHeader>
-            <CardContent>
-                {tripBudget !== null ? (
-                    <>
-                        <p className="text-2xl font-bold">{tripBudget.toFixed(2)} <span className="text-sm text-muted-foreground">{expenses.length > 0 ? expenses[0].currency : 'USD'}</span></p>
-                        <Progress value={budgetProgress} className="mt-2 h-3" />
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Spent: {totalGroupExpense.toFixed(2)} ({budgetProgress.toFixed(1)}%)
-                        </p>
-                        {totalGroupExpense > tripBudget && (
-                            <p className="text-xs text-destructive font-semibold mt-1">Budget exceeded!</p>
-                        )}
-                    </>
-                ) : (
-                    <p className="text-muted-foreground">No budget set yet.</p>
-                )}
-            </CardContent>
-            <CardFooter>
-                <Button variant="outline" size="sm" onClick={handleOpenBudgetDialog}>
-                    {tripBudget !== null ? 'Edit Budget' : 'Set Budget'}
-                </Button>
-            </CardFooter>
-        </Card>
-         <Card className="shadow-md bg-card md:col-start-3 lg:col-start-auto">
-          <CardHeader>
-            <CardTitle className="text-lg text-primary">Expenses by Category</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[200px] pt-0">
-            {expenseDataForChart.length > 0 ? (
-              <ChartContainer config={chartConfig} className="h-full w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                    <Pie
-                      data={expenseDataForChart}
-                      dataKey="total"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={60} 
-                      labelLine={false}
-                      label={({ name, percent }: PieLabelRenderProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
-                    >
-                      {expenseDataForChart.map((entry) => (
-                        <Cell key={`cell-${entry.name}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Legend wrapperStyle={{ fontSize: '0.75rem', paddingTop: '10px' }}/>
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            ) : (
-              <p className="text-muted-foreground text-center pt-10">No expense data for chart.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="mb-8 shadow-lg bg-card">
-        <CardHeader>
-          <CardTitle className="text-xl text-primary flex items-center"><Users className="mr-2" /> User Balances</CardTitle>
-          <CardDescription>Summary of who owes money or is owed money. "Mark as Settled" helps track when debts are cleared.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {balances.length > 0 ? (
-            <ul className="space-y-3">
-              {balances.map(balance => (
-                <li key={balance.userId} className="p-3 rounded-lg border bg-background">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-semibold text-foreground">{balance.userName}</p>
-                      <p className="text-xs text-muted-foreground">Paid: {balance.totalPaid.toFixed(2)}, Share: {balance.totalShare.toFixed(2)}</p>
-                    </div>
-                    <div className="text-right">
-                       <p className={`font-bold ${balance.isSettled ? 'text-green-600' : (balance.netBalance >= 0 ? 'text-green-600' : 'text-red-600')}`}>
-                        {balance.isSettled 
-                            ? <span className="flex items-center justify-end"><CheckCircle className="w-4 h-4 mr-1" />Settled</span>
-                            : (balance.netBalance >= 0 
-                                ? `Owed: ${balance.netBalance.toFixed(2)}` 
-                                : `Owes: ${Math.abs(balance.netBalance).toFixed(2)}`)}
-                      </p>
-                      {balance.netBalance < 0 && !balance.isSettled && (
-                        <Button
-                          onClick={() => handleMarkAsSettled(balance.userId)}
-                          size="sm"
-                          variant="outline"
-                          className="mt-1 text-xs h-auto py-1 px-2"
-                        >
-                           <CheckCircle className="w-3 h-3 mr-1" /> Mark as Settled
-                        </Button>
-                      )}
-                       {balance.netBalance > 0 && !balance.isSettled && (
-                         <Button
-                            onClick={() => toast({ title: "Reminder Sent (Simulation)", description: `A reminder to ${balance.userName} to settle up could be sent here.`})}
-                            size="sm"
-                            variant="outline"
-                            className="mt-1 text-xs h-auto py-1 px-2 border-primary text-primary hover:bg-primary/10"
-                        >
-                            <Send className="w-3 h-3 mr-1" /> Remind
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-             <p className="text-muted-foreground">No users found to calculate balances.</p>
-          )}
-        </CardContent>
-      </Card>
-      
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-semibold text-primary">All Expenses</h2>
-        <Button variant="outline" onClick={handleDownloadReport}>
-            <Download className="mr-2 h-4 w-4" /> Download Report
-        </Button>
-      </div>
-      
-      {expenses.length === 0 && (
-         <Card className="text-center p-8 shadow-md bg-card">
-            <CardHeader>
-              <CardTitle className="text-2xl text-muted-foreground">No Expenses Logged Yet</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="mb-4">
-                Start by adding your first shared expense for the trip!
-              </CardDescription>
-              <Image 
-                src="https://picsum.photos/seed/empty-expenses/400/250" 
-                alt="Empty Expenses Illustration" 
-                width={400} 
-                height={250} 
-                className="mx-auto rounded-lg shadow-sm"
-                data-ai-hint="finance money"
-              />
-            </CardContent>
-         </Card>
-      )}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {expenses.map(expense => {
-            const paidByUser = users.find(u => u.id === expense.paidByUserId);
-            const CategoryIcon = categoryIcons[expense.category] || DollarSign;
-            return (
-            <Card key={expense.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col bg-card">
+      {selectedTripId ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <Card className="shadow-md bg-card">
+              <CardHeader>
+                <CardTitle className="text-lg text-primary">Total Expenses for {selectedTrip?.name}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{totalGroupExpense.toFixed(2)} <span className="text-sm text-muted-foreground">{filteredExpenses.length > 0 ? filteredExpenses[0].currency : 'USD'}</span></p>
+                <p className="text-xs text-muted-foreground"> (Assumes all expenses are in the first expense's currency or manually converted by user)</p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-md bg-card">
                 <CardHeader>
-                <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg text-primary flex items-center"><CategoryIcon className="w-5 h-5 mr-2 text-accent" />{expense.description}</CardTitle>
-                    <span className="text-xl font-bold text-foreground">{expense.amount.toFixed(2)} <span className="text-xs text-muted-foreground">{expense.currency}</span></span>
-                </div>
-                <CardDescription>Category: {expense.category} | Date: {expense.date}</CardDescription>
+                    <CardTitle className="text-lg text-primary flex items-center"><Target className="mr-2"/>Budget for {selectedTrip?.name}</CardTitle>
                 </CardHeader>
-                <CardContent className="flex-grow text-sm">
-                <p className="text-muted-foreground">Paid by: <span className="font-medium text-foreground">{paidByUser?.name || 'Unknown User'}</span></p>
-                <p className="text-muted-foreground mt-1">Participants: <span className="font-medium text-foreground">{expense.participantIds.map(pid => users.find(u=>u.id===pid)?.name || 'Unknown').join(', ')}</span></p>
-                 <p className="text-xs text-muted-foreground mt-1">Split: Equally among participants</p>
+                <CardContent>
+                    {tripBudget !== null ? (
+                        <>
+                            <p className="text-2xl font-bold">{tripBudget.toFixed(2)} <span className="text-sm text-muted-foreground">{filteredExpenses.length > 0 ? filteredExpenses[0].currency : 'USD'}</span></p>
+                            <Progress value={budgetProgress} className="mt-2 h-3" />
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Spent: {totalGroupExpense.toFixed(2)} ({budgetProgress.toFixed(1)}%)
+                            </p>
+                            {totalGroupExpense > tripBudget && (
+                                <p className="text-xs text-destructive font-semibold mt-1">Budget exceeded!</p>
+                            )}
+                        </>
+                    ) : (
+                        <p className="text-muted-foreground">No budget set yet for this trip.</p>
+                    )}
                 </CardContent>
-                <CardFooter className="flex justify-end gap-2 border-t pt-4">
-                <Button variant="ghost" size="icon" onClick={() => handleEditExpense(expense)} className="text-muted-foreground hover:text-primary">
-                    <Edit2 className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(expense.id)} className="text-muted-foreground hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                </Button>
+                <CardFooter>
+                    <Button variant="outline" size="sm" onClick={handleOpenBudgetDialog}>
+                        {tripBudget !== null ? 'Edit Budget' : 'Set Budget'}
+                    </Button>
                 </CardFooter>
             </Card>
-            );
-        })}
-      </div>
+            <Card className="shadow-md bg-card md:col-start-3 lg:col-start-auto">
+              <CardHeader>
+                <CardTitle className="text-lg text-primary">Expenses by Category for {selectedTrip?.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[200px] pt-0">
+                {expenseDataForChart.length > 0 ? (
+                  <ChartContainer config={chartConfig} className="h-full w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                        <Pie
+                          data={expenseDataForChart}
+                          dataKey="total"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={60} 
+                          labelLine={false}
+                          label={({ name, percent }: PieLabelRenderProps) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
+                        >
+                          {expenseDataForChart.map((entry) => (
+                            <Cell key={`cell-${entry.name}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Legend wrapperStyle={{ fontSize: '0.75rem', paddingTop: '10px' }}/>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                ) : (
+                  <p className="text-muted-foreground text-center pt-10">No expense data for chart.</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="mb-8 shadow-lg bg-card">
+            <CardHeader>
+              <CardTitle className="text-xl text-primary flex items-center"><Users className="mr-2" /> User Balances for {selectedTrip?.name}</CardTitle>
+              <CardDescription>Summary of who owes money or is owed money. "Mark as Settled" helps track when debts are cleared.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {balances.length > 0 ? (
+                <ul className="space-y-3">
+                  {balances.map(balance => (
+                    <li key={balance.userId} className="p-3 rounded-lg border bg-background">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-semibold text-foreground">{balance.userName}</p>
+                          <p className="text-xs text-muted-foreground">Paid: {balance.totalPaid.toFixed(2)}, Share: {balance.totalShare.toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-bold ${balance.isSettled ? 'text-green-600' : (balance.netBalance >= 0 ? 'text-green-600' : 'text-red-600')}`}>
+                            {balance.isSettled 
+                                ? <span className="flex items-center justify-end"><CheckCircle className="w-4 h-4 mr-1" />Settled</span>
+                                : (balance.netBalance >= 0 
+                                    ? `Owed: ${balance.netBalance.toFixed(2)}` 
+                                    : `Owes: ${Math.abs(balance.netBalance).toFixed(2)}`)}
+                          </p>
+                          {balance.netBalance < 0 && !balance.isSettled && (
+                            <Button
+                              onClick={() => handleMarkAsSettled(balance.userId)}
+                              size="sm"
+                              variant="outline"
+                              className="mt-1 text-xs h-auto py-1 px-2"
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" /> Mark as Settled
+                            </Button>
+                          )}
+                          {balance.netBalance > 0 && !balance.isSettled && (
+                            <Button
+                                onClick={() => toast({ title: "Reminder Sent (Simulation)", description: `A reminder to ${balance.userName} to settle up could be sent here.`})}
+                                size="sm"
+                                variant="outline"
+                                className="mt-1 text-xs h-auto py-1 px-2 border-primary text-primary hover:bg-primary/10"
+                            >
+                                <Send className="w-3 h-3 mr-1" /> Remind
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">No balances to display for this trip. Add some expenses!</p>
+              )}
+            </CardContent>
+          </Card>
+          
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold text-primary">All Expenses for {selectedTrip?.name}</h2>
+            <Button variant="outline" onClick={handleDownloadReport} disabled={!selectedTripId}>
+                <Download className="mr-2 h-4 w-4" /> Download Report
+            </Button>
+          </div>
+          
+          {filteredExpenses.length === 0 && (
+            <Card className="text-center p-8 shadow-md bg-card">
+                <CardHeader>
+                <CardTitle className="text-2xl text-muted-foreground">No Expenses Logged for {selectedTrip?.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                <CardDescription className="mb-4">
+                    Start by adding your first shared expense for this trip!
+                </CardDescription>
+                <Image 
+                    src="https://picsum.photos/seed/empty-expenses-trip/400/250" 
+                    alt="Empty Expenses Illustration" 
+                    width={400} 
+                    height={250} 
+                    className="mx-auto rounded-lg shadow-sm"
+                    data-ai-hint="finance money"
+                />
+                </CardContent>
+            </Card>
+          )}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredExpenses.map(expense => {
+                const paidByUser = users.find(u => u.id === expense.paidByUserId);
+                const CategoryIcon = categoryIcons[expense.category] || DollarSign;
+                return (
+                <Card key={expense.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col bg-card">
+                    <CardHeader>
+                    <div className="flex justify-between items-start">
+                        <CardTitle className="text-lg text-primary flex items-center"><CategoryIcon className="w-5 h-5 mr-2 text-accent" />{expense.description}</CardTitle>
+                        <span className="text-xl font-bold text-foreground">{expense.amount.toFixed(2)} <span className="text-xs text-muted-foreground">{expense.currency}</span></span>
+                    </div>
+                    <CardDescription>Category: {expense.category} | Date: {expense.date}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-grow text-sm">
+                    <p className="text-muted-foreground">Paid by: <span className="font-medium text-foreground">{paidByUser?.name || 'Unknown User'}</span></p>
+                    <p className="text-muted-foreground mt-1">Participants: <span className="font-medium text-foreground">{expense.participantIds.map(pid => users.find(u=>u.id===pid)?.name || 'Unknown').join(', ')}</span></p>
+                    <p className="text-xs text-muted-foreground mt-1">Split: Equally among participants</p>
+                    </CardContent>
+                    <CardFooter className="flex justify-end gap-2 border-t pt-4">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditExpense(expense)} className="text-muted-foreground hover:text-primary">
+                        <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteExpense(expense.id)} className="text-muted-foreground hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                    </CardFooter>
+                </Card>
+                );
+            })}
+          </div>
+        </>
+      ) : (
+        <Card className="text-center p-8 shadow-md bg-card">
+            <CardHeader>
+                <CardTitle className="text-2xl text-muted-foreground">No Trip Selected</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <CardDescription className="mb-4">
+                    Please select a trip from the dropdown above to view and manage its expenses.
+                </CardDescription>
+                <Image 
+                    src="https://picsum.photos/seed/select-trip-expenses/400/250" 
+                    alt="Select a trip for expenses" 
+                    width={400} 
+                    height={250} 
+                    className="mx-auto rounded-lg shadow-sm"
+                    data-ai-hint="travel planning"
+                />
+            </CardContent>
+        </Card>
+      )}
       
        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="shadow-md bg-card opacity-70">
