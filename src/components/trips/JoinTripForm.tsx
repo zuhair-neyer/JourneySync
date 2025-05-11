@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect
 import { useAuth } from '@/contexts/AuthContext';
 import { joinTripInDb } from '@/firebase/tripService';
 import { useTripContext } from '@/contexts/TripContext';
@@ -18,10 +18,23 @@ export function JoinTripForm() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (currentUser) {
+      console.log("JoinTripForm currentUser updated:", { 
+        uid: currentUser.uid, 
+        displayName: currentUser.displayName, 
+        email: currentUser.email 
+      });
+    } else {
+      console.log("JoinTripForm currentUser is null");
+    }
+  }, [currentUser]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
       toast({ variant: "destructive", title: "Error", description: "You must be logged in to join a trip." });
+      console.error("JoinTripForm: handleSubmit called without currentUser.");
       return;
     }
     if (!tripId.trim()) {
@@ -35,6 +48,8 @@ export function JoinTripForm() {
       displayName: currentUser.displayName,
       email: currentUser.email,
     };
+    console.log("JoinTripForm: basicUserInfo being sent to joinTripInDb:", basicUserInfo);
+
     const success = await joinTripInDb(tripId, basicUserInfo);
     setIsLoading(false);
 
@@ -43,7 +58,8 @@ export function JoinTripForm() {
       setTripId('');
       refreshUserTrips();
     } else {
-      toast({ variant: "destructive", title: "Error", description: "Failed to join trip. Please check the ID or try again." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to join trip. Please check the ID or server logs." });
+      console.error("Client-side: joinTripInDb returned false. Check server logs from 'tripService.ts' for details.");
     }
   };
 
@@ -69,7 +85,7 @@ export function JoinTripForm() {
           </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isLoading}>
+          <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isLoading || !currentUser}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
             Join Trip
           </Button>

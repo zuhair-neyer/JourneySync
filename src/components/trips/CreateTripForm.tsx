@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect
 import { useAuth } from '@/contexts/AuthContext';
 import { createTripInDb } from '@/firebase/tripService';
 import { useTripContext } from '@/contexts/TripContext';
@@ -20,10 +19,23 @@ export function CreateTripForm() {
   const [createdTripId, setCreatedTripId] = useState<string | null>(null);
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (currentUser) {
+      console.log("CreateTripForm currentUser updated:", { 
+        uid: currentUser.uid, 
+        displayName: currentUser.displayName, 
+        email: currentUser.email 
+      });
+    } else {
+      console.log("CreateTripForm currentUser is null");
+    }
+  }, [currentUser]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
       toast({ variant: "destructive", title: "Error", description: "You must be logged in to create a trip." });
+      console.error("CreateTripForm: handleSubmit called without currentUser.");
       return;
     }
     if (!tripName.trim()) {
@@ -39,6 +51,7 @@ export function CreateTripForm() {
       displayName: currentUser.displayName,
       email: currentUser.email,
     };
+    console.log("CreateTripForm: basicUserInfo being sent to createTripInDb:", basicUserInfo);
 
     const newTripId = await createTripInDb(tripName, basicUserInfo);
     setIsLoading(false);
@@ -50,6 +63,7 @@ export function CreateTripForm() {
       refreshUserTrips();
     } else {
       toast({ variant: "destructive", title: "Error", description: "Failed to create trip. Please check server logs for details." });
+      // The detailed error is already logged in tripService, this client-side log points to checking server logs.
       console.error("Client-side: createTripInDb returned null. This usually indicates a server-side error with Firebase (e.g., permission denied, misconfiguration). Check your Next.js server console logs for detailed Firebase error messages from 'tripService.ts'.");
     }
   };
@@ -95,7 +109,7 @@ export function CreateTripForm() {
           )}
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading || !currentUser}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Create Trip
           </Button>
