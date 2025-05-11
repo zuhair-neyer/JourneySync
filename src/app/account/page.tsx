@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, UserCog, Shield } from 'lucide-react'; 
+import { Loader2, UserCog, Shield, MailCheck, MailWarning } from 'lucide-react'; 
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -31,14 +31,22 @@ type UpdateNameFormValues = z.infer<typeof updateNameSchema>;
 type UpdatePasswordFormValues = z.infer<typeof updatePasswordSchema>;
 
 export default function AccountPage() {
-  const { currentUser, loading: authLoading, error: authError, setError: setAuthError, updateUserProfile, updateUserPassword } = useAuth();
+  const { 
+    currentUser, 
+    loading: authLoading, 
+    error: authError, 
+    setError: setAuthError, 
+    updateUserProfile, 
+    updateUserPassword,
+    resendVerificationEmail 
+  } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const nameForm = useForm<UpdateNameFormValues>({
     resolver: zodResolver(updateNameSchema),
     defaultValues: {
-      name: "", // Initial default, will be updated by useEffect
+      name: "", 
     },
   });
 
@@ -55,9 +63,8 @@ export default function AccountPage() {
       router.push('/login');
     }
     if (currentUser) {
-        // Reset form with current user's display name or empty string
         nameForm.reset({ name: currentUser.displayName || "" });
-        console.log("[AccountPage] useEffect: currentUser.displayName set in form:", currentUser.displayName);
+        console.log("[AccountPage] useEffect: currentUser.displayName set in form:", currentUser.displayName, "Email Verified:", currentUser.emailVerified);
     }
   }, [currentUser, authLoading, router, nameForm]);
 
@@ -101,7 +108,28 @@ export default function AccountPage() {
           <div className="space-y-4">
             <div>
               <Label>Email Address</Label>
-              <Input type="email" value={currentUser.email || "No email provided"} readOnly disabled className="bg-muted mt-1" />
+              <div className="flex items-center gap-2 mt-1">
+                 <Input type="email" value={currentUser.email || "No email provided"} readOnly disabled className="bg-muted flex-grow" />
+                 {currentUser.emailVerified ? (
+                   <span className="text-xs px-2 py-1 rounded-md bg-green-100 text-green-700 border border-green-200 flex items-center gap-1">
+                     <MailCheck className="h-3 w-3" /> Verified
+                   </span>
+                 ) : (
+                   <span className="text-xs px-2 py-1 rounded-md bg-yellow-100 text-yellow-700 border border-yellow-300 flex items-center gap-1">
+                     <MailWarning className="h-3 w-3" /> Not Verified
+                   </span>
+                 )}
+              </div>
+              {!currentUser.emailVerified && (
+                <Button 
+                  variant="link" 
+                  className="mt-1 px-0 text-primary h-auto text-sm hover:underline" 
+                  onClick={resendVerificationEmail}
+                  disabled={authLoading}
+                >
+                  Resend Verification Email
+                </Button>
+              )}
             </div>
             <Form {...nameForm}>
               <form onSubmit={nameForm.handleSubmit(onUpdateNameSubmit)} className="space-y-4">
