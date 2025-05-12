@@ -1,7 +1,6 @@
-
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,6 +14,16 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, MailWarning } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -25,7 +34,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const { logIn, loading, error, setError, resendVerificationEmail, currentUser } = useAuth();
+  const { logIn, loading, error, setError, resendVerificationEmail, currentUser, sendPasswordReset } = useAuth();
   const { toast } = useToast();
   
   const form = useForm<LoginFormValues>({
@@ -37,6 +46,9 @@ export default function LoginPage() {
     },
   });
 
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+
   const onSubmit = async (data: LoginFormValues) => {
     await logIn(data.email, data.password, data.rememberMe);
   };
@@ -44,18 +56,15 @@ export default function LoginPage() {
   const handleResendEmail = async () => {
     const emailFromForm = form.getValues("email");
     if (!emailFromForm) {
-      setError("Please enter your email address first."); // Sets form error message
+      setError("Please enter your email address first."); 
       toast({ variant: "destructive", title: "Input Error", description: "Please enter your email address to resend verification." });
       return;
     }
 
-    // Condition 1: The current authenticated user (if any) matches the email in form and is not verified.
     const condition1 = currentUser && currentUser.email === emailFromForm && !currentUser.emailVerified;
-    // Condition 2: The last login attempt error message suggests the email is not verified.
     const condition2 = error && error.toLowerCase().includes("email not verified");
 
     if (condition1 || condition2) {
-      // Attempt to resend. The AuthContext.resendVerificationEmail will handle cases like no current user.
       await resendVerificationEmail();
     } else {
       toast({
@@ -65,6 +74,17 @@ export default function LoginPage() {
       });
     }
   };
+
+  const handleForgotPassword = async () => {
+    if (!forgotPasswordEmail.trim()) {
+      toast({ variant: "destructive", title: "Email Required", description: "Please enter your email address." });
+      return;
+    }
+    await sendPasswordReset(forgotPasswordEmail);
+    setIsForgotPasswordOpen(false); 
+    setForgotPasswordEmail(""); 
+  };
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -154,10 +174,45 @@ export default function LoginPage() {
             </Link>
           </p>
            <p className="mt-2 text-center text-xs text-muted-foreground">
-            Forgot your password? You can reset it via your account page or contact support.
+            <Button
+                type="button"
+                variant="link"
+                className="px-0 text-xs h-auto text-muted-foreground hover:text-primary hover:underline"
+                onClick={() => setIsForgotPasswordOpen(true)}
+              >
+                Forgot your password?
+            </Button>
           </p>
         </CardFooter>
       </Card>
+
+      <AlertDialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Your Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enter your email address below. If an account exists, we'll send you a link to reset your password.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="forgot-password-email">Email Address</Label>
+            <Input
+              id="forgot-password-email"
+              type="email"
+              placeholder="you@example.com"
+              value={forgotPasswordEmail}
+              onChange={(e) => setForgotPasswordEmail(e.target.value)}
+              className="bg-background"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setIsForgotPasswordOpen(false); setForgotPasswordEmail("");}}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleForgotPassword} disabled={loading || !forgotPasswordEmail.trim()}>
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Send Reset Link"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

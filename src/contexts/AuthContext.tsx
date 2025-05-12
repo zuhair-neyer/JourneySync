@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { ReactNode, Dispatch, SetStateAction } from 'react';
@@ -16,7 +15,8 @@ import {
   updateProfile,
   updatePassword as firebaseUpdatePassword,
   sendEmailVerification,
-  deleteUser
+  deleteUser,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail
 } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +34,7 @@ interface AuthContextType {
   updateUserPassword: (newPassword: string) => Promise<void>;
   resendVerificationEmail: () => Promise<void>;
   deleteUserAccount: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -395,6 +396,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const sendPasswordReset = async (email: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await firebaseSendPasswordResetEmail(auth, email);
+      toast({
+        title: "Password Reset Email Sent",
+        description: "If an account with that email exists, a password reset link has been sent. Please check your inbox.",
+      });
+    } catch (e) {
+      const authError = e as AuthError;
+      setError(authError.message); 
+      toast({
+        variant: "destructive",
+        title: "Password Reset Failed",
+        description: authError.message, 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const value = {
     currentUser,
@@ -408,7 +431,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     updateUserPassword,
     resendVerificationEmail, 
     deleteUserAccount,
+    sendPasswordReset,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
