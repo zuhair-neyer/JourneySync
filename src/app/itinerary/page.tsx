@@ -527,7 +527,7 @@ export default function ItineraryPage() {
                     <ChatIcon className="mr-2 h-4 w-4 text-accent" /> Real-time Chat
                   </h4>
                   <ScrollArea className="h-40 pr-2 mb-2 border rounded-md p-2 bg-secondary/30">
-                    <div className="space-y-3">
+                    <div className="flex flex-col space-y-3"> {/* Ensured flex-col for explicit line-wise stacking */}
                       {itemChatMessages.length > 0 ? itemChatMessages.map(msg => (
                         <div key={msg.id} className={`text-xs p-2 rounded-md ${msg.userId === currentUser?.uid ? 'bg-primary/20 ml-auto' : 'bg-muted/70 mr-auto'} max-w-[80%]`}>
                           <div className="flex items-center gap-2 mb-0.5">
@@ -604,3 +604,4 @@ export default function ItineraryPage() {
     </div>
   );
 }
+
