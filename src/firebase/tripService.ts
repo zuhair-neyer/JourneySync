@@ -1,7 +1,7 @@
 
 'use server';
 import { database } from '@/firebase/config';
-import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment, PackingItem } from '@/types';
+import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment, PackingItem, ChatMessage } from '@/types';
 import { ref, push, set, get, child, update, serverTimestamp, remove } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
@@ -514,8 +514,9 @@ export async function addItineraryItemToTripDb(tripId: string, itemData: Omit<It
         ...itemData, 
         id: itemId,
         votes: itemData.votes || 0, 
-        votedBy: itemData.votedBy || [], // Initialize votedBy for new items
+        votedBy: itemData.votedBy || [],
         comments: itemData.comments || [], 
+        chatMessages: {}, // Initialize chatMessages for new items
     };
     await set(newItemRef, itemToAdd);
     return itemId;
@@ -539,8 +540,9 @@ export async function getItineraryItemsForTripFromDb(tripId: string): Promise<It
         id: itemId,
         tripId: tripId,
         votes: itemsData[itemId].votes || 0,
-        votedBy: itemsData[itemId].votedBy || [], // Ensure votedBy exists
+        votedBy: itemsData[itemId].votedBy || [], 
         comments: itemsData[itemId].comments || [], 
+        chatMessages: itemsData[itemId].chatMessages || {},
       }));
       return itemsArray;
     }
@@ -551,7 +553,7 @@ export async function getItineraryItemsForTripFromDb(tripId: string): Promise<It
   }
 }
 
-export async function updateItineraryItemInTripDb(tripId: string, itemId: string, itemData: Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'comments'>>): Promise<boolean> {
+export async function updateItineraryItemInTripDb(tripId: string, itemId: string, itemData: Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'comments' | 'chatMessages'>>): Promise<boolean> {
   if (!tripId || !itemId) {
     console.error("[tripService] updateItineraryItemInTripDb: Trip ID and Item ID are required.");
     return false;
@@ -567,8 +569,7 @@ export async function updateItineraryItemInTripDb(tripId: string, itemId: string
     if (itemData.time !== undefined) updates[`${basePath}/time`] = itemData.time;
     if (itemData.notes !== undefined) updates[`${basePath}/notes`] = itemData.notes;
     if (itemData.votes !== undefined) updates[`${basePath}/votes`] = itemData.votes;
-    if (itemData.votedBy !== undefined) updates[`${basePath}/votedBy`] = itemData.votedBy; // Handle votedBy updates
-    // Comments are handled by addCommentToItineraryItemDb
+    if (itemData.votedBy !== undefined) updates[`${basePath}/votedBy`] = itemData.votedBy;
 
     if (Object.keys(updates).length === 0) {
         console.warn("[tripService] updateItineraryItemInTripDb: No valid fields to update provided.");
@@ -625,6 +626,38 @@ export async function addCommentToItineraryItemDb(tripId: string, itemId: string
     return commentData.id; 
   } catch (error: any) {
     console.error(`[tripService] addCommentToItineraryItemDb: Error adding comment to item ${itemId} in trip ${tripId}:`, error.message);
+    return null;
+  }
+}
+
+export async function addChatMessageToItineraryItemDb(tripId: string, itemId: string, chatMessageData: Omit<ChatMessage, 'id'>): Promise<string | null> {
+  if (!tripId || !itemId) {
+    console.error("[tripService] addChatMessageToItineraryItemDb: Trip ID and Item ID are required.");
+    return null;
+  }
+  if (!chatMessageData || !chatMessageData.userId || !chatMessageData.text || !chatMessageData.userName) {
+    console.error("[tripService] addChatMessageToItineraryItemDb: Chat message data is incomplete.");
+    return null;
+  }
+
+  try {
+    const chatMessagesRef = ref(database, `trips/${tripId}/itinerary/${itemId}/chatMessages`);
+    const newMessageRef = push(chatMessagesRef);
+    const messageId = newMessageRef.key;
+
+    if (!messageId) {
+      console.error("[tripService] addChatMessageToItineraryItemDb: Failed to generate chat message ID.");
+      return null;
+    }
+    
+    const messageToAdd: ChatMessage = { 
+        ...chatMessageData, 
+        id: messageId,
+    };
+    await set(newMessageRef, messageToAdd);
+    return messageId;
+  } catch (error: any) {
+    console.error(`[tripService] addChatMessageToItineraryItemDb: Error adding chat message to item ${itemId} in trip ${tripId}:`, error.message);
     return null;
   }
 }
@@ -745,7 +778,9 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
             for (const itemId in itineraryItems) {
                 if (itineraryItems[itemId].createdBy === userId) {
                     updates[`/trips/${tripId}/itinerary/${itemId}`] = null;
-                }
+                } // Also need to check comments and chat messages by this user within each item. This can get complex.
+                  // For simplicity, we'll only remove items created by the user.
+                  // A more thorough deletion would iterate through comments/chat and remove those too.
             }
         }
       }
@@ -775,24 +810,17 @@ export async function deleteTripFromDb(tripId: string, memberUids: string[]): Pr
     console.error("[tripService] deleteTripFromDb: Trip ID is required.");
     return false;
   }
-  // memberUids can be empty if the trip somehow had no members listed or if it's an old trip structure
-  // The function should still attempt to delete the main trip data.
 
   try {
     const updates: { [key: string]: any } = {};
-    updates[`/trips/${tripId}`] = null; // Mark main trip data for deletion
+    updates[`/trips/${tripId}`] = null; 
 
     if (memberUids && memberUids.length > 0) {
       for (const uid of memberUids) {
-        updates[`/users/${uid}/trips/${tripId}`] = null; // Mark trip reference in each user's node for deletion
+        updates[`/users/${uid}/trips/${tripId}`] = null; 
       }
     } else {
-      console.warn(`[tripService] deleteTripFromDb: No memberUids provided for trip ${tripId} or memberUids array is empty. Only the main trip data at /trips/${tripId} will be targeted for deletion, plus any user references found by iterating /users.`);
-      // Fallback: if memberUids is not comprehensive, try to find all users who have this trip and remove it.
-      // This is more exhaustive but less efficient. For simplicity, we'll rely on passed memberUids for now.
-      // A more robust solution might involve querying users who have this tripId in their /users/{uid}/trips node.
-      // However, Realtime Database doesn't support complex queries like "find all users where trips/{tripId} exists".
-      // The current approach is a good balance if selectedTrip.members is accurate.
+      console.warn(`[tripService] deleteTripFromDb: No memberUids provided for trip ${tripId} or memberUids array is empty. Only the main trip data at /trips/${tripId} will be targeted for deletion. User references might remain if not all members were passed.`);
     }
 
     await update(ref(database), updates);

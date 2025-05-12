@@ -30,6 +30,14 @@ export interface ItineraryComment {
   createdAt: number; // Timestamp
 }
 
+export interface ChatMessage {
+  id: string; // Firebase key
+  userId: string;
+  userName: string;
+  text: string;
+  createdAt: number; // Timestamp
+}
+
 export interface ItineraryItem {
   id: string;
   tripId: string; // ID of the trip this item belongs to
@@ -44,6 +52,7 @@ export interface ItineraryItem {
   votes: number; 
   votedBy: string[]; // Array of UIDs of users who voted for this item
   comments: ItineraryComment[]; 
+  chatMessages?: { [messageId: string]: Omit<ChatMessage, 'id'> }; // Path for chat messages in DB
 }
 
 export interface PackingItem {
