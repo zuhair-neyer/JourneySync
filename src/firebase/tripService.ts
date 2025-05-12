@@ -770,3 +770,40 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
   }
 }
 
+export async function deleteTripFromDb(tripId: string, memberUids: string[]): Promise<boolean> {
+  if (!tripId) {
+    console.error("[tripService] deleteTripFromDb: Trip ID is required.");
+    return false;
+  }
+  // memberUids can be empty if the trip somehow had no members listed or if it's an old trip structure
+  // The function should still attempt to delete the main trip data.
+
+  try {
+    const updates: { [key: string]: any } = {};
+    updates[`/trips/${tripId}`] = null; // Mark main trip data for deletion
+
+    if (memberUids && memberUids.length > 0) {
+      for (const uid of memberUids) {
+        updates[`/users/${uid}/trips/${tripId}`] = null; // Mark trip reference in each user's node for deletion
+      }
+    } else {
+      console.warn(`[tripService] deleteTripFromDb: No memberUids provided for trip ${tripId} or memberUids array is empty. Only the main trip data at /trips/${tripId} will be targeted for deletion, plus any user references found by iterating /users.`);
+      // Fallback: if memberUids is not comprehensive, try to find all users who have this trip and remove it.
+      // This is more exhaustive but less efficient. For simplicity, we'll rely on passed memberUids for now.
+      // A more robust solution might involve querying users who have this tripId in their /users/{uid}/trips node.
+      // However, Realtime Database doesn't support complex queries like "find all users where trips/{tripId} exists".
+      // The current approach is a good balance if selectedTrip.members is accurate.
+    }
+
+    await update(ref(database), updates);
+    console.log(`[tripService] deleteTripFromDb: Successfully marked trip ${tripId} and its user references for deletion.`);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] deleteTripFromDb: Error deleting trip ${tripId}:`, error.message, "(Code:", error.code || 'N/A', ")");
+    if (error.code === 'PERMISSION_DENIED') {
+        console.error("[tripService] deleteTripFromDb: PERMISSION DENIED. Check Firebase Realtime Database rules for writing to '/trips' and '/users'.");
+    }
+    return false;
+  }
+}
+

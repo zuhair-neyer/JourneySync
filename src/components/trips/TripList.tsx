@@ -9,9 +9,21 @@ import { EditTripNameDialog } from './EditTripNameDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link'; // Import Link
+import Link from 'next/link'; 
 import Image from 'next/image';
-import { AlertTriangle, Edit, LayoutDashboard } from 'lucide-react'; // Added LayoutDashboard
+import { AlertTriangle, Edit, LayoutDashboard, Trash2, Loader2 } from 'lucide-react'; 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
 
 interface EditingTripDetails {
   id: string;
@@ -28,12 +40,16 @@ export function TripList() {
     selectedTripId, 
     setSelectedTripId, 
     errorUserTrips,
-    errorSelectedTrip 
+    errorSelectedTrip,
+    deleteTrip 
   } = useTripContext();
   const { currentUser } = useAuth();
+  const { toast } = useToast();
 
   const [isEditTripNameDialogOpen, setIsEditTripNameDialogOpen] = useState(false);
   const [editingTripDetails, setEditingTripDetails] = useState<EditingTripDetails | null>(null);
+  const [isDeletingTrip, setIsDeletingTrip] = useState(false);
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
 
   useEffect(() => {
@@ -117,6 +133,20 @@ export function TripList() {
     }
   };
 
+  const handleConfirmDeleteTrip = async () => {
+    if (!selectedTrip) return;
+    setIsDeletingTrip(true);
+    const success = await deleteTrip(selectedTrip.id, Object.keys(selectedTrip.members || {}));
+    setIsDeletingTrip(false);
+    if (success) {
+      toast({ title: "Trip Deleted", description: `Trip "${selectedTrip.name}" has been deleted.` });
+      // Context update (clearing selectedTripId if it was deleted) handled by deleteTrip in context
+    } else {
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete trip." });
+    }
+    setDeleteConfirmationOpen(false);
+  };
+
   return (
     <div className="space-y-8 mt-6">
       <div>
@@ -173,8 +203,8 @@ export function TripList() {
             )}
           </CardContent>
           {selectedTrip && !isLoadingSelectedTrip && !errorSelectedTrip && (
-            <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 border-t gap-2">
-              <div>
+            <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 border-t gap-3">
+              <div className="flex-grow">
                 <p className="text-xs text-muted-foreground">
                     Created by: {selectedTrip.members[selectedTrip.createdBy]?.name || `User...${selectedTrip.createdBy.substring(selectedTrip.createdBy.length-4)}`} on {new Date(selectedTrip.createdAt).toLocaleDateString()}
                 </p>
@@ -185,14 +215,49 @@ export function TripList() {
                 </Link>
               </div>
               {currentUser?.uid === selectedTrip.createdBy && (
+                <div className="flex flex-col sm:flex-row gap-2 self-start sm:self-center w-full sm:w-auto">
                   <Button
                       variant="outline"
                       size="sm"
                       onClick={handleOpenEditDialog}
-                      className="mt-2 sm:mt-0"
+                      className="w-full sm:w-auto"
                   >
                       <Edit className="mr-2 h-4 w-4" /> Edit Name
                   </Button>
+                  <AlertDialog open={deleteConfirmationOpen} onOpenChange={setDeleteConfirmationOpen}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={isDeletingTrip}
+                      >
+                        {isDeletingTrip ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                        Delete Trip
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete the trip
+                          "{selectedTrip?.name}" and all its associated data (expenses, itinerary, polls, etc.)
+                          for all members.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeletingTrip}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleConfirmDeleteTrip}
+                          disabled={isDeletingTrip}
+                          className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                          {isDeletingTrip ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Yes, delete trip"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               )}
             </CardFooter>
           )}

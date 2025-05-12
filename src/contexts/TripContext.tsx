@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ReactNode, Dispatch, SetStateAction } from 'react';
@@ -5,7 +6,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { User as FirebaseUser } from 'firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import type { UserTripInfo, Trip } from '@/types';
-import { getUserTripsFromDb, getTripDetailsFromDb } from '@/firebase/tripService';
+import { getUserTripsFromDb, getTripDetailsFromDb, deleteTripFromDb } from '@/firebase/tripService';
 
 interface TripContextType {
   userTrips: UserTripInfo[];
@@ -15,9 +16,10 @@ interface TripContextType {
   setSelectedTripId: Dispatch<SetStateAction<string | null>>;
   isLoadingSelectedTrip: boolean;
   refreshUserTrips: () => void;
-  refreshSelectedTripDetails: () => void; // New function
+  refreshSelectedTripDetails: () => void; 
   errorUserTrips: string | null; 
   errorSelectedTrip: string | null; 
+  deleteTrip: (tripId: string, memberUids: string[]) => Promise<boolean>;
 }
 
 const TripContext = createContext<TripContextType | undefined>(undefined);
@@ -60,7 +62,7 @@ export function TripProvider({ children }: TripProviderProps) {
     } finally {
       setIsLoadingUserTrips(false);
     }
-  }, []); // Memoize fetchUserTrips, it doesn't depend on external state that changes frequently within TripProvider
+  }, []); 
 
   useEffect(() => {
     if (currentUser?.uid) {
@@ -75,7 +77,7 @@ export function TripProvider({ children }: TripProviderProps) {
       setErrorUserTrips(null);
       setErrorSelectedTrip(null);
     }
-  }, [currentUser?.uid, fetchUserTrips]); // Depend on currentUser.uid and the memoized fetchUserTrips
+  }, [currentUser?.uid, fetchUserTrips]); 
 
 
   const fetchSelectedTripDetails = useCallback(async () => {
@@ -104,12 +106,9 @@ export function TripProvider({ children }: TripProviderProps) {
     } finally {
       setIsLoadingSelectedTrip(false);
     }
-  }, [selectedTripId]); // fetchSelectedTripDetails is memoized with selectedTripId as dependency
+  }, [selectedTripId]); 
 
   useEffect(() => {
-    // This effect runs when selectedTripId changes (via fetchSelectedTripDetails dependency)
-    // or when the current logged-in user's display name changes,
-    // prompting a re-fetch of the selected trip details which might contain the user's updated name.
     console.log("[TripContext] useEffect for fetchSelectedTripDetails triggered. selectedTripId:", selectedTripId, "currentUser.displayName:", currentUser?.displayName);
     fetchSelectedTripDetails();
   }, [fetchSelectedTripDetails, currentUser?.displayName]); 
@@ -118,8 +117,6 @@ export function TripProvider({ children }: TripProviderProps) {
     if (currentUser?.uid) {
       console.log(`[TripContext] refreshUserTrips called for UID: ${currentUser.uid}.`);
       fetchUserTrips(currentUser.uid);
-      // fetchUserTrips will set isLoadingUserTrips. 
-      // The useEffect for selectedTripDetails will trigger if selectedTripId is set.
     }
   }, [currentUser?.uid, fetchUserTrips]);
 
@@ -129,6 +126,35 @@ export function TripProvider({ children }: TripProviderProps) {
         fetchSelectedTripDetails();
     }
   }, [selectedTripId, fetchSelectedTripDetails]);
+
+  const deleteTrip = useCallback(async (tripId: string, memberUids: string[]): Promise<boolean> => {
+    console.log(`[TripContext] deleteTrip called for tripId: ${tripId}`);
+    // Consider adding a specific loading state e.g., setIsLoadingDeleting(true)
+    setErrorSelectedTrip(null); // Clear specific error for selected trip if it's being deleted
+
+    try {
+      const success = await deleteTripFromDb(tripId, memberUids);
+      if (success) {
+        console.log(`[TripContext] Trip ${tripId} deleted successfully. Refreshing user trips.`);
+        refreshUserTrips(); // Re-fetch trips, this will update userTrips and trigger other effects
+        if (selectedTripId === tripId) {
+          setSelectedTripId(null); // Clear selected trip if it was the one deleted
+          setSelectedTrip(null);
+        }
+        return true;
+      } else {
+        console.error(`[TripContext] Failed to delete trip ${tripId} via tripService.`);
+        // Toast message for failure should be handled in the component calling this method
+        return false;
+      }
+    } catch (error: any) {
+      console.error(`[TripContext] Error during deleteTrip for ${tripId}:`, error);
+      setErrorSelectedTrip(error.message || "Failed to delete trip."); // Or a general error state
+      return false;
+    } finally {
+      // if using specific loading state: setIsLoadingDeleting(false)
+    }
+  }, [refreshUserTrips, selectedTripId]);
 
 
   const value = {
@@ -140,9 +166,11 @@ export function TripProvider({ children }: TripProviderProps) {
     isLoadingSelectedTrip,
     refreshUserTrips,
     refreshSelectedTripDetails, 
+    deleteTrip,
     errorUserTrips,
     errorSelectedTrip,
   };
 
   return <TripContext.Provider value={value}>{children}</TripContext.Provider>;
 }
+
