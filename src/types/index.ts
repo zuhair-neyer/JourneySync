@@ -30,13 +30,14 @@ export interface ItineraryComment {
   createdAt: number; // Timestamp
 }
 
-export interface ChatMessage {
-  id: string; // Firebase key
-  userId: string;
-  userName: string;
-  text: string;
-  createdAt: number; // Timestamp
-}
+// ChatMessage interface is removed as chat feature is being removed.
+// export interface ChatMessage {
+//   id: string; // Firebase key
+//   userId: string;
+//   userName: string;
+//   text: string;
+//   createdAt: number; // Timestamp
+// }
 
 export interface ItineraryItem {
   id: string;
@@ -52,7 +53,7 @@ export interface ItineraryItem {
   votes: number; 
   votedBy: string[]; // Array of UIDs of users who voted for this item
   comments: ItineraryComment[]; 
-  chatMessages?: { [messageId: string]: Omit<ChatMessage, 'id'> }; // Path for chat messages in DB
+  // chatMessages?: { [messageId: string]: Omit<ChatMessage, 'id'> }; // Removed chatMessages
 }
 
 export interface PackingItem {
@@ -103,4 +104,3 @@ export interface Expense {
   participantIds: string[];
   tripId: string; 
 }
-

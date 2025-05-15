@@ -1,7 +1,7 @@
 
 'use server';
 import { database } from '@/firebase/config';
-import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment, PackingItem, ChatMessage } from '@/types';
+import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment, PackingItem } from '@/types'; // Removed ChatMessage
 import { ref, push, set, get, child, update, serverTimestamp, remove } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
@@ -516,7 +516,6 @@ export async function addItineraryItemToTripDb(tripId: string, itemData: Omit<It
         votes: itemData.votes || 0, 
         votedBy: itemData.votedBy || [],
         comments: itemData.comments || [], 
-        chatMessages: {}, // Initialize chatMessages for new items
     };
     await set(newItemRef, itemToAdd);
     return itemId;
@@ -542,7 +541,6 @@ export async function getItineraryItemsForTripFromDb(tripId: string): Promise<It
         votes: itemsData[itemId].votes || 0,
         votedBy: itemsData[itemId].votedBy || [], 
         comments: itemsData[itemId].comments || [], 
-        chatMessages: itemsData[itemId].chatMessages || {},
       }));
       return itemsArray;
     }
@@ -553,7 +551,7 @@ export async function getItineraryItemsForTripFromDb(tripId: string): Promise<It
   }
 }
 
-export async function updateItineraryItemInTripDb(tripId: string, itemId: string, itemData: Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'comments' | 'chatMessages'>>): Promise<boolean> {
+export async function updateItineraryItemInTripDb(tripId: string, itemId: string, itemData: Partial<Omit<ItineraryItem, 'id' | 'tripId' | 'comments'>>): Promise<boolean> {
   if (!tripId || !itemId) {
     console.error("[tripService] updateItineraryItemInTripDb: Trip ID and Item ID are required.");
     return false;
@@ -629,39 +627,6 @@ export async function addCommentToItineraryItemDb(tripId: string, itemId: string
     return null;
   }
 }
-
-export async function addChatMessageToItineraryItemDb(tripId: string, itemId: string, chatMessageData: Omit<ChatMessage, 'id'>): Promise<string | null> {
-  if (!tripId || !itemId) {
-    console.error("[tripService] addChatMessageToItineraryItemDb: Trip ID and Item ID are required.");
-    return null;
-  }
-  if (!chatMessageData || !chatMessageData.userId || !chatMessageData.text || !chatMessageData.userName) {
-    console.error("[tripService] addChatMessageToItineraryItemDb: Chat message data is incomplete.");
-    return null;
-  }
-
-  try {
-    const chatMessagesRef = ref(database, `trips/${tripId}/itinerary/${itemId}/chatMessages`);
-    const newMessageRef = push(chatMessagesRef);
-    const messageId = newMessageRef.key;
-
-    if (!messageId) {
-      console.error("[tripService] addChatMessageToItineraryItemDb: Failed to generate chat message ID.");
-      return null;
-    }
-    
-    const messageToAdd: ChatMessage = { 
-        ...chatMessageData, 
-        id: messageId,
-    };
-    await set(newMessageRef, messageToAdd);
-    return messageId;
-  } catch (error: any) {
-    console.error(`[tripService] addChatMessageToItineraryItemDb: Error adding chat message to item ${itemId} in trip ${tripId}:`, error.message);
-    return null;
-  }
-}
-
 
 // Packing List related functions
 export async function addPackingItemToTripDb(tripId: string, itemData: Omit<PackingItem, 'id'>): Promise<string | null> {
@@ -834,4 +799,3 @@ export async function deleteTripFromDb(tripId: string, memberUids: string[]): Pr
     return false;
   }
 }
-
