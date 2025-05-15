@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import type { Expense } from '@/types';
 import { Separator } from '@/components/ui/separator';
-import { addExpenseToDb, getExpensesForTripFromDb, updateExpenseInDb, deleteExpenseFromDb } from '@/firebase/tripService';
+import { addExpenseToDb, getExpensesForTripFromDb, updateExpenseInDb, deleteExpenseFromDb, updateSettledStatusForTripDb } from '@/firebase/tripService';
 
 
 interface User {
@@ -99,7 +99,7 @@ const categoryColors: { [key: string]: string } = {
 
 export default function ExpensesPage() {
   const { currentUser } = useAuth();
-  const { userTrips, selectedTripId, setSelectedTripId, isLoadingUserTrips, selectedTrip } = useTripContext();
+  const { userTrips, selectedTripId, setSelectedTripId, isLoadingUserTrips, selectedTrip, refreshSelectedTripDetails } = useTripContext();
   const { toast } = useToast();
   
   const [users, setUsers] = useState<User[]>([]); 
@@ -111,7 +111,10 @@ export default function ExpensesPage() {
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [totalGroupExpense, setTotalGroupExpense] = useState(0); // This will be in BASE_APP_CURRENCY
-  const [settledStatus, setSettledStatus] = useState<Record<string, boolean>>({});
+  
+  const settledStatus = useMemo(() => {
+    return selectedTrip?.settledStatus || {};
+  }, [selectedTrip?.settledStatus]);
 
   const [tripBudget, setTripBudget] = useState<number | null>(null); // Stored in BASE_APP_CURRENCY
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
@@ -214,7 +217,7 @@ export default function ExpensesPage() {
       totalPaid: userExpensesSummary[user.id]?.paid || 0, // in BASE_APP_CURRENCY
       totalShare: userExpensesSummary[user.id]?.share || 0, // in BASE_APP_CURRENCY
       netBalance: (userExpensesSummary[user.id]?.paid || 0) - (userExpensesSummary[user.id]?.share || 0), // in BASE_APP_CURRENCY
-      isSettled: settledStatus[user.id] || false,
+      isSettled: settledStatus[user.id] || false, // Uses the derived settledStatus
     }));
 
     setBalances(newBalances);
@@ -327,11 +330,26 @@ export default function ExpensesPage() {
     setIsExpenseDialogOpen(true);
   };
 
-  const handleMarkAsSettled = (userIdToSettle: string) => {
-    setSettledStatus(prev => ({ ...prev, [userIdToSettle]: true }));
-    const userName = usersInCurrentTrip.find(u => u.id === userIdToSettle)?.name || 'User';
-    toast({ title: "Success", description: `${userName}'s balance marked as settled for trip "${selectedTrip?.name}".` });
+  const handleMarkAsSettled = async (userIdToSettle: string) => {
+    if (!selectedTripId || !selectedTrip) {
+        toast({ variant: "destructive", title: "Error", description: "No trip selected." });
+        return;
+    }
+
+    const currentStatus = selectedTrip.settledStatus?.[userIdToSettle] || false;
+    const newStatus = !currentStatus; // Toggle status
+
+    const success = await updateSettledStatusForTripDb(selectedTripId, userIdToSettle, newStatus);
+
+    if (success) {
+      refreshSelectedTripDetails(); // This will update selectedTrip and trigger re-calculation
+      const userName = usersInCurrentTrip.find(u => u.id === userIdToSettle)?.name || 'User';
+      toast({ title: "Success", description: `${userName}'s balance marked as ${newStatus ? 'settled' : 'unsettled'} for trip "${selectedTrip?.name}".` });
+    } else {
+      toast({ variant: "destructive", title: "Error", description: "Failed to update settlement status." });
+    }
   };
+
 
   const handleOpenBudgetDialog = () => {
     if (!selectedTripId) {
@@ -675,14 +693,15 @@ export default function ExpensesPage() {
                                       ? `Owed: ${netBalanceForDisplay.toFixed(2)} ${displayCurrency}` 
                                       : `Owes: ${Math.abs(netBalanceForDisplay).toFixed(2)} ${displayCurrency}`)}
                             </p>
-                            {netBalanceForDisplay < 0 && !balance.isSettled && (
+                            {netBalanceForDisplay < 0 && (
                               <Button
                                 onClick={() => handleMarkAsSettled(balance.userId)}
                                 size="sm"
-                                variant="outline"
+                                variant={balance.isSettled ? "secondary" : "outline"}
                                 className="mt-1 text-xs h-auto py-1 px-2"
                               >
-                                <CheckCircle className="w-3 h-3 mr-1" /> Mark as Settled
+                                <CheckCircle className="w-3 h-3 mr-1" /> 
+                                {balance.isSettled ? "Mark as Unsettled" : "Mark as Settled"}
                               </Button>
                             )}
                             {netBalanceForDisplay > 0 && !balance.isSettled && (
@@ -709,7 +728,6 @@ export default function ExpensesPage() {
           
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-semibold text-primary">All Expenses for {selectedTrip?.name}</h2>
-             {/* Download Report Button Removed */}
           </div>
           
           {isLoadingExpenses ? (
@@ -727,7 +745,7 @@ export default function ExpensesPage() {
                     Start by adding your first shared expense for this trip!
                 </CardDescription>
                 <Image 
-                    src="https://picsum.photos/seed/empty-expenses-trip/400/250" 
+                    src="https://placehold.co/400x250.png" 
                     alt="Empty Expenses Illustration" 
                     width={400} 
                     height={250} 
@@ -779,7 +797,7 @@ export default function ExpensesPage() {
                     Please select a trip from the dropdown above to view and manage its expenses.
                 </CardDescription>
                 <Image 
-                    src="https://picsum.photos/seed/select-trip-expenses/400/250" 
+                    src="https://placehold.co/400x250.png" 
                     alt="Select a trip for expenses" 
                     width={400} 
                     height={250} 
@@ -790,7 +808,6 @@ export default function ExpensesPage() {
         </Card>
       )}
       
-       {/* Removed Notification & Currency Feature Cards */}
     </div>
   );
 }

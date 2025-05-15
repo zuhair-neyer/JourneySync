@@ -1,7 +1,7 @@
 
 'use server';
 import { database } from '@/firebase/config';
-import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment, PackingItem } from '@/types'; // Removed ChatMessage
+import type { Trip, TripMember, UserTripInfo, Expense, Poll, PollOption, ItineraryItem, ItineraryComment, PackingItem } from '@/types'; 
 import { ref, push, set, get, child, update, serverTimestamp, remove } from 'firebase/database';
 
 // Define a simpler interface for user information passed to server actions
@@ -72,6 +72,7 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       polls: {}, 
       itinerary: {}, 
       packingList: {},
+      settledStatus: {}, // Initialize settledStatus
     };
     await set(newTripRef, newTripData);
 
@@ -234,6 +235,7 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         polls: tripData.polls || {},
         itinerary: tripData.itinerary || {},
         packingList: tripData.packingList || {},
+        settledStatus: tripData.settledStatus || {}, // Ensure settledStatus is fetched
       } as Trip;
 
       if (tripData.createdBy && !processedMembers[tripData.createdBy]) {
@@ -743,9 +745,7 @@ export async function deleteUserDataFromDb(userId: string): Promise<void> {
             for (const itemId in itineraryItems) {
                 if (itineraryItems[itemId].createdBy === userId) {
                     updates[`/trips/${tripId}/itinerary/${itemId}`] = null;
-                } // Also need to check comments and chat messages by this user within each item. This can get complex.
-                  // For simplicity, we'll only remove items created by the user.
-                  // A more thorough deletion would iterate through comments/chat and remove those too.
+                } 
             }
         }
       }
@@ -799,3 +799,21 @@ export async function deleteTripFromDb(tripId: string, memberUids: string[]): Pr
     return false;
   }
 }
+
+// Function to update settled status in Firebase
+export async function updateSettledStatusForTripDb(tripId: string, userId: string, isSettled: boolean): Promise<boolean> {
+  if (!tripId || !userId) {
+    console.error("[tripService] updateSettledStatusForTripDb: Trip ID and User ID are required.");
+    return false;
+  }
+  try {
+    const settledStatusPath = `trips/${tripId}/settledStatus/${userId}`;
+    // Using set to either create or overwrite the boolean value
+    await set(ref(database, settledStatusPath), isSettled);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] updateSettledStatusForTripDb: Error updating settled status for user ${userId} in trip ${tripId}:`, error.message);
+    return false;
+  }
+}
+

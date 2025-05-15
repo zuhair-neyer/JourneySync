@@ -30,15 +30,6 @@ export interface ItineraryComment {
   createdAt: number; // Timestamp
 }
 
-// ChatMessage interface is removed as chat feature is being removed.
-// export interface ChatMessage {
-//   id: string; // Firebase key
-//   userId: string;
-//   userName: string;
-//   text: string;
-//   createdAt: number; // Timestamp
-// }
-
 export interface ItineraryItem {
   id: string;
   tripId: string; // ID of the trip this item belongs to
@@ -53,7 +44,6 @@ export interface ItineraryItem {
   votes: number; 
   votedBy: string[]; // Array of UIDs of users who voted for this item
   comments: ItineraryComment[]; 
-  // chatMessages?: { [messageId: string]: Omit<ChatMessage, 'id'> }; // Removed chatMessages
 }
 
 export interface PackingItem {
@@ -61,8 +51,6 @@ export interface PackingItem {
   name: string;
   packed: boolean;
   category: string; 
-  // tripId is implicit by its location in the DB under trips/{tripId}/packingList/{itemId}
-  // It can be added client-side if needed when items are fetched.
 }
 
 export interface Trip {
@@ -74,7 +62,7 @@ export interface Trip {
     [uid: string]: TripMember;
   };
   expenses?: { 
-    [expenseId: string]: Expense; // Stores the full Expense object, id is the key
+    [expenseId: string]: Expense; 
   };
   polls?: { 
     [pollId: string]: Omit<Poll, 'id' | 'tripId'>; 
@@ -82,8 +70,11 @@ export interface Trip {
   itinerary?: {
     [itemId: string]: Omit<ItineraryItem, 'id' | 'tripId'>;
   };
-  packingList?: { // Represents the structure in Firebase
-    [itemId: string]: Omit<PackingItem, 'id'>; // itemId is the PackingItem.id, object stores other props
+  packingList?: { 
+    [itemId: string]: Omit<PackingItem, 'id'>; 
+  };
+  settledStatus?: { // Added for persisting settlement status
+    [userId: string]: boolean; // e.g., { "user123": true, "user456": false }
   };
 }
 
