@@ -232,7 +232,7 @@ export default function ExpensesPage() {
       toast({
         variant: "destructive",
         title: "Budget Exceeded",
-        description: `The group has spent ${totalExpenseForDisplay.toFixed(2)} ${displayCurrency} for trip "${selectedTrip?.name}", exceeding the budget of ${budgetForDisplay.toFixed(2)} ${displayCurrency}.`,
+        description: `The group has spent ${totalExpenseForDisplay.toFixed(2)} ${displayCurrency} for trip "${selectedTrip?.name || 'this trip'}", exceeding the budget of ${budgetForDisplay.toFixed(2)} ${displayCurrency}.`,
       });
     }
   }, [totalGroupExpense, tripBudget, toast, selectedTripId, selectedTrip?.name, displayCurrency]);
