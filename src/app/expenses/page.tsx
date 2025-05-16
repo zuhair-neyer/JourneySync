@@ -197,7 +197,7 @@ export default function ExpensesPage() {
     }
 
     let newTotalGroupExpenseInBase = 0;
-    const userExpensesSummary: { [userId: string]: { paid: number; share: number } } = {}; // All values in BASE_APP_CURRENCY
+    const userExpensesSummary: { [userId: string]: { paid: number; share: number } } = {};
 
     activeUsers.forEach(user => {
       userExpensesSummary[user.id] = { paid: 0, share: 0 };
@@ -207,17 +207,19 @@ export default function ExpensesPage() {
       const amountInBaseCurrency = convertCurrency(expense.amount, expense.currency, BASE_APP_CURRENCY);
       newTotalGroupExpenseInBase += amountInBaseCurrency;
 
-      if (userExpensesSummary[expense.paidByUserId] && activeUsers.some(u => u.id === expense.paidByUserId)) {
+      if (userExpensesSummary[expense.paidByUserId]) { // Check if paidByUserId is an active user in the summary
         userExpensesSummary[expense.paidByUserId].paid += amountInBaseCurrency;
       }
 
-      const participantsInExpenseForThisTrip = expense.participantIds.filter(pid => activeUsers.some(u => u.id === pid));
+      const participantsInExpenseForThisTrip = expense.participantIds.filter(pid => 
+        activeUsers.some(u => u.id === pid) // Ensure participant is in the current trip's active users
+      );
       const numParticipants = participantsInExpenseForThisTrip.length;
 
       if (numParticipants > 0) {
         const sharePerParticipantInBase = amountInBaseCurrency / numParticipants;
         participantsInExpenseForThisTrip.forEach(pid => {
-          if (userExpensesSummary[pid]) { 
+          if (userExpensesSummary[pid]) { // Check if participantId is an active user in the summary
             userExpensesSummary[pid].share += sharePerParticipantInBase;
           }
         });
@@ -227,14 +229,14 @@ export default function ExpensesPage() {
     const newBalances: Balance[] = activeUsers.map(user => ({
       userId: user.id,
       userName: user.name,
-      totalPaid: userExpensesSummary[user.id]?.paid || 0, // in BASE_APP_CURRENCY
-      totalShare: userExpensesSummary[user.id]?.share || 0, // in BASE_APP_CURRENCY
-      netBalance: (userExpensesSummary[user.id]?.paid || 0) - (userExpensesSummary[user.id]?.share || 0), // in BASE_APP_CURRENCY
-      isSettled: settledStatus[user.id] || false, // Uses the derived settledStatus
+      totalPaid: userExpensesSummary[user.id]?.paid || 0, 
+      totalShare: userExpensesSummary[user.id]?.share || 0, 
+      netBalance: (userExpensesSummary[user.id]?.paid || 0) - (userExpensesSummary[user.id]?.share || 0),
+      isSettled: settledStatus[user.id] || false,
     }));
 
     setBalances(newBalances);
-    setTotalGroupExpense(newTotalGroupExpenseInBase); // Stored in BASE_APP_CURRENCY
+    setTotalGroupExpense(newTotalGroupExpenseInBase);
   }, [expensesForSelectedTrip, usersInCurrentTrip, settledStatus, selectedTripId]);
 
   useEffect(() => {
@@ -285,12 +287,12 @@ export default function ExpensesPage() {
     }
 
     const expenseDataToSave: Omit<Expense, 'id' | 'tripId'> = {
-      description: currentExpense.description,
-      amount: currentExpense.amount,
+      description: currentExpense.description!,
+      amount: currentExpense.amount!,
       currency: currentExpense.currency!,
       category: currentExpense.category!,
-      paidByUserId: currentExpense.paidByUserId,
-      date: currentExpense.date,
+      paidByUserId: currentExpense.paidByUserId!,
+      date: currentExpense.date!,
       participantIds: currentExpense.participantIds!,
     };
     
@@ -355,7 +357,7 @@ export default function ExpensesPage() {
     const success = await updateSettledStatusForTripDb(selectedTripId, userIdToSettle, newStatus);
 
     if (success) {
-      refreshSelectedTripDetails(); // This will update selectedTrip and trigger re-calculation
+      refreshSelectedTripDetails(); 
       const userName = usersInCurrentTrip.find(u => u.id === userIdToSettle)?.name || 'User';
       toast({ title: "Success", description: `${userName}'s balance marked as ${newStatus ? 'settled' : 'unsettled'} for trip "${selectedTrip?.name}".` });
     } else {
@@ -369,7 +371,6 @@ export default function ExpensesPage() {
       toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip to set its budget." });
       return;
     }
-    // Use budget from selectedTrip (via TripContext) if available
     const currentBudget = selectedTrip?.budget;
     setBudgetInput(currentBudget === null || currentBudget === undefined ? "" : currentBudget.toString());
     setIsBudgetDialogOpen(true);
@@ -380,7 +381,7 @@ export default function ExpensesPage() {
       toast({variant: "destructive", title: "Error", description: "No trip selected."});
       return;
     }
-    const newBudgetInBase = parseFloat(budgetInput); // Input is taken as BASE_APP_CURRENCY
+    const newBudgetInBase = parseFloat(budgetInput); 
     if (isNaN(newBudgetInBase) || newBudgetInBase < 0) {
       toast({ variant: "destructive", title: "Invalid Budget", description: "Please enter a valid positive number for the budget." });
       return;
@@ -388,7 +389,7 @@ export default function ExpensesPage() {
     
     const success = await updateTripBudgetInDb(selectedTripId, newBudgetInBase);
     if (success) {
-        refreshSelectedTripDetails(); // This will update selectedTrip in context
+        refreshSelectedTripDetails(); 
         const budgetForDisplay = convertCurrency(newBudgetInBase, BASE_APP_CURRENCY, displayCurrency);
         toast({ title: "Success", description: `Budget for trip "${selectedTrip?.name}" set to ${budgetForDisplay.toFixed(2)} ${displayCurrency}.` });
         setIsBudgetDialogOpen(false);
@@ -403,7 +404,7 @@ export default function ExpensesPage() {
       .reduce((sum, exp) => sum + convertCurrency(exp.amount, exp.currency, BASE_APP_CURRENCY), 0);
     return {
       name: category,
-      total: totalForCategoryInBase, // This total is in BASE_APP_CURRENCY
+      total: totalForCategoryInBase, 
       fill: categoryColors[category] || 'hsl(var(--muted))',
     };
   }).filter(item => item.total > 0);
@@ -418,7 +419,7 @@ export default function ExpensesPage() {
     return config;
   }, {} as ChartConfig);
 
-  const budgetProgress = tripBudget && tripBudget > 0 ? (totalGroupExpense / tripBudget) * 100 : 0; // Both in BASE_APP_CURRENCY
+  const budgetProgress = tripBudget && tripBudget > 0 ? (totalGroupExpense / tripBudget) * 100 : 0;
 
   const totalGroupExpenseForDisplay = convertCurrency(totalGroupExpense, BASE_APP_CURRENCY, displayCurrency);
   const tripBudgetForDisplay = tripBudget !== null ? convertCurrency(tripBudget, BASE_APP_CURRENCY, displayCurrency) : null;
@@ -611,7 +612,7 @@ export default function ExpensesPage() {
                             <p className="text-xs text-muted-foreground mt-1">
                                 Spent: {totalGroupExpenseForDisplay.toFixed(2)} {displayCurrency} ({budgetProgress.toFixed(1)}%)
                             </p>
-                            {tripBudget !== null && totalGroupExpense > tripBudget && ( // Comparison in BASE_APP_CURRENCY
+                            {tripBudget !== null && totalGroupExpense > tripBudget && ( 
                                 <p className="text-xs text-destructive font-semibold mt-1">Budget exceeded!</p>
                             )}
                         </>
@@ -662,7 +663,7 @@ export default function ExpensesPage() {
                               }}
                         />
                         <Pie
-                          data={expenseDataForChart} // dataKey 'total' is in BASE_APP_CURRENCY
+                          data={expenseDataForChart} 
                           dataKey="total"
                           nameKey="name"
                           cx="50%"
@@ -835,3 +836,4 @@ export default function ExpensesPage() {
     </div>
   );
 }
+
