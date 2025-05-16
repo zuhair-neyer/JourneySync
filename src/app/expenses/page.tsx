@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import type { Expense } from '@/types';
 import { Separator } from '@/components/ui/separator';
-import { addExpenseToDb, getExpensesForTripFromDb, updateExpenseInDb, deleteExpenseFromDb, updateSettledStatusForTripDb } from '@/firebase/tripService';
+import { addExpenseToDb, getExpensesForTripFromDb, updateExpenseInDb, deleteExpenseFromDb, updateSettledStatusForTripDb, updateTripBudgetInDb } from '@/firebase/tripService';
 
 
 interface User {
@@ -121,6 +121,19 @@ export default function ExpensesPage() {
   const [budgetInput, setBudgetInput] = useState<string>("");
 
   const [displayCurrency, setDisplayCurrency] = useState<string>(currencies[0]);
+
+  // Sync local tripBudget with selectedTrip.budget from context
+  useEffect(() => {
+    if (selectedTrip) {
+      setTripBudget(selectedTrip.budget === undefined ? null : selectedTrip.budget);
+      // If budget dialog is open, update input field as well
+      if (isBudgetDialogOpen && selectedTrip.budget !== undefined) {
+          setBudgetInput(selectedTrip.budget === null ? "" : selectedTrip.budget.toString());
+      }
+    } else {
+      setTripBudget(null); // Clear budget if no trip is selected
+    }
+  }, [selectedTrip, isBudgetDialogOpen]);
 
 
   useEffect(() => {
@@ -356,21 +369,32 @@ export default function ExpensesPage() {
       toast({ variant: "destructive", title: "Select a Trip", description: "Please select a trip to set its budget." });
       return;
     }
-    // If tripBudget (in BASE_APP_CURRENCY) exists, convert it to string for input. Otherwise, empty.
-    setBudgetInput(tripBudget !== null ? tripBudget.toString() : "");
+    // Use budget from selectedTrip (via TripContext) if available
+    const currentBudget = selectedTrip?.budget;
+    setBudgetInput(currentBudget === null || currentBudget === undefined ? "" : currentBudget.toString());
     setIsBudgetDialogOpen(true);
   };
 
-  const handleSaveBudget = () => {
+  const handleSaveBudget = async () => {
+    if (!selectedTripId) {
+      toast({variant: "destructive", title: "Error", description: "No trip selected."});
+      return;
+    }
     const newBudgetInBase = parseFloat(budgetInput); // Input is taken as BASE_APP_CURRENCY
     if (isNaN(newBudgetInBase) || newBudgetInBase < 0) {
       toast({ variant: "destructive", title: "Invalid Budget", description: "Please enter a valid positive number for the budget." });
       return;
     }
-    setTripBudget(newBudgetInBase); 
-    const budgetForDisplay = convertCurrency(newBudgetInBase, BASE_APP_CURRENCY, displayCurrency);
-    toast({ title: "Success", description: `Budget for trip "${selectedTrip?.name}" set to ${budgetForDisplay.toFixed(2)} ${displayCurrency}.` });
-    setIsBudgetDialogOpen(false);
+    
+    const success = await updateTripBudgetInDb(selectedTripId, newBudgetInBase);
+    if (success) {
+        refreshSelectedTripDetails(); // This will update selectedTrip in context
+        const budgetForDisplay = convertCurrency(newBudgetInBase, BASE_APP_CURRENCY, displayCurrency);
+        toast({ title: "Success", description: `Budget for trip "${selectedTrip?.name}" set to ${budgetForDisplay.toFixed(2)} ${displayCurrency}.` });
+        setIsBudgetDialogOpen(false);
+    } else {
+        toast({ variant: "destructive", title: "Error", description: "Failed to save budget." });
+    }
   };
 
   const expenseDataForChart = expenseCategories.map(category => {

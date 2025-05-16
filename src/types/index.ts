@@ -73,9 +73,10 @@ export interface Trip {
   packingList?: { 
     [itemId: string]: Omit<PackingItem, 'id'>; 
   };
-  settledStatus?: { // Added for persisting settlement status
-    [userId: string]: boolean; // e.g., { "user123": true, "user456": false }
+  settledStatus?: { 
+    [userId: string]: boolean; 
   };
+  budget?: number | null; // Added budget field
 }
 
 export interface UserTripInfo { 

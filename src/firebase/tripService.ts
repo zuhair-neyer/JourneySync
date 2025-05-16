@@ -72,7 +72,8 @@ export async function createTripInDb(tripName: string, userInfo: BasicUserInfo):
       polls: {}, 
       itinerary: {}, 
       packingList: {},
-      settledStatus: {}, // Initialize settledStatus
+      settledStatus: {},
+      budget: null, // Initialize budget
     };
     await set(newTripRef, newTripData);
 
@@ -235,7 +236,8 @@ export async function getTripDetailsFromDb(tripId: string): Promise<Trip | null>
         polls: tripData.polls || {},
         itinerary: tripData.itinerary || {},
         packingList: tripData.packingList || {},
-        settledStatus: tripData.settledStatus || {}, // Ensure settledStatus is fetched
+        settledStatus: tripData.settledStatus || {},
+        budget: tripData.budget === undefined ? null : tripData.budget, // Fetch budget
       } as Trip;
 
       if (tripData.createdBy && !processedMembers[tripData.createdBy]) {
@@ -329,6 +331,21 @@ export async function updateTripNameInDb(tripId: string, newTripName: string, me
     if (error.code === 'PERMISSION_DENIED') {
         console.error("[tripService] updateTripNameInDb: PERMISSION DENIED. Check Firebase Realtime Database rules for writing to '/trips' and '/users'.");
     }
+    return false;
+  }
+}
+
+export async function updateTripBudgetInDb(tripId: string, budget: number | null): Promise<boolean> {
+  if (!tripId) {
+    console.error("[tripService] updateTripBudgetInDb: Trip ID is required.");
+    return false;
+  }
+  try {
+    const budgetPath = `trips/${tripId}/budget`;
+    await set(ref(database, budgetPath), budget);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] updateTripBudgetInDb: Error updating budget for trip ${tripId}:`, error.message);
     return false;
   }
 }
@@ -816,4 +833,3 @@ export async function updateSettledStatusForTripDb(tripId: string, userId: strin
     return false;
   }
 }
-
