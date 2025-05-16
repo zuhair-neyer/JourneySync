@@ -152,14 +152,7 @@ export default function RecommendationsPage() {
               <CardDescription className="mb-4">
                 Fill out the form above to get AI-powered recommendations for your trip!
               </CardDescription>
-              <Image 
-                src="https://placehold.co/400x250.png"
-                alt="Waiting for recommendations illustration" 
-                width={400} 
-                height={250} 
-                className="mx-auto rounded-lg shadow-sm"
-                data-ai-hint="ideas discovery"
-              />
+              {/* Removed Image component from here */}
             </CardContent>
          </Card>
       )}
@@ -167,4 +160,3 @@ export default function RecommendationsPage() {
     </div>
   );
 }
-
