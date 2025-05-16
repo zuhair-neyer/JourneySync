@@ -207,19 +207,19 @@ export default function ExpensesPage() {
       const amountInBaseCurrency = convertCurrency(expense.amount, expense.currency, BASE_APP_CURRENCY);
       newTotalGroupExpenseInBase += amountInBaseCurrency;
 
-      if (userExpensesSummary[expense.paidByUserId]) { // Check if paidByUserId is an active user in the summary
+      if (userExpensesSummary[expense.paidByUserId]) { 
         userExpensesSummary[expense.paidByUserId].paid += amountInBaseCurrency;
       }
 
       const participantsInExpenseForThisTrip = expense.participantIds.filter(pid => 
-        activeUsers.some(u => u.id === pid) // Ensure participant is in the current trip's active users
+        activeUsers.some(u => u.id === pid) 
       );
       const numParticipants = participantsInExpenseForThisTrip.length;
 
       if (numParticipants > 0) {
         const sharePerParticipantInBase = amountInBaseCurrency / numParticipants;
         participantsInExpenseForThisTrip.forEach(pid => {
-          if (userExpensesSummary[pid]) { // Check if participantId is an active user in the summary
+          if (userExpensesSummary[pid]) { 
             userExpensesSummary[pid].share += sharePerParticipantInBase;
           }
         });
@@ -769,14 +769,6 @@ export default function ExpensesPage() {
                 <CardDescription className="mb-4">
                     Start by adding your first shared expense for this trip!
                 </CardDescription>
-                <Image 
-                    src="https://placehold.co/400x250.png" 
-                    alt="Empty Expenses Illustration" 
-                    width={400} 
-                    height={250} 
-                    className="mx-auto rounded-lg shadow-sm"
-                    data-ai-hint="finance money"
-                />
                 </CardContent>
             </Card>
           ) : (
@@ -821,14 +813,6 @@ export default function ExpensesPage() {
                 <CardDescription className="mb-4">
                     Please select a trip from the dropdown above to view and manage its expenses.
                 </CardDescription>
-                <Image 
-                    src="https://placehold.co/400x250.png" 
-                    alt="Select a trip for expenses" 
-                    width={400} 
-                    height={250} 
-                    className="mx-auto rounded-lg shadow-sm"
-                    data-ai-hint="travel planning"
-                />
             </CardContent>
         </Card>
       )}
