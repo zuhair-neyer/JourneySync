@@ -123,18 +123,17 @@ export default function RecommendationsPage() {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {state.recommendations.map((rec, index) => (
               <Card key={index} className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col bg-card">
-                <CardHeader>
+                <CardHeader className="p-4"> {/* Reduced padding */}
                   <div className="flex items-center gap-3 mb-2">
                     {getIconForType(rec.type)}
                     <CardTitle className="text-xl text-primary">{rec.name}</CardTitle>
                   </div>
-                  {/* Image removed from here */}
-                  <CardDescription className="text-sm text-muted-foreground mt-2">Type: {rec.type}</CardDescription>
+                  <CardDescription className="text-sm text-muted-foreground mt-1">Type: {rec.type}</CardDescription> {/* Adjusted margin */}
                 </CardHeader>
-                <CardContent className="flex-grow">
+                <CardContent className="flex-grow p-4 pt-0"> {/* Reduced padding */}
                   <p className="text-foreground">{rec.description}</p>
                 </CardContent>
-                <CardFooter className="flex-col items-start border-t pt-4">
+                <CardFooter className="flex-col items-start border-t p-4 pt-4"> {/* Ensured consistent padding */}
                   <h4 className="font-semibold text-sm text-primary mb-1 flex items-center"><ThumbsUp className="h-4 w-4 mr-2 text-accent" /> Why we suggest this:</h4>
                   <p className="text-xs text-muted-foreground">{rec.reason}</p>
                 </CardFooter>
