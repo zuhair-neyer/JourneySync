@@ -143,19 +143,7 @@ export default function RecommendationsPage() {
         </div>
       )}
       
-      {!state?.error && state?.recommendations?.length === 0 && !initialState.recommendations?.length && (
-         <Card className="text-center p-8 shadow-md bg-card mt-8">
-            <CardHeader>
-              <CardTitle className="text-2xl text-muted-foreground">Ready for Suggestions?</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="mb-4">
-                Fill out the form above to get AI-powered recommendations for your trip!
-              </CardDescription>
-              {/* Removed Image component from here */}
-            </CardContent>
-         </Card>
-      )}
+      {/* The "Ready for Suggestions?" card block has been removed from here */}
 
     </div>
   );
