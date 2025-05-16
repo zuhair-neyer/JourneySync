@@ -128,14 +128,7 @@ export default function RecommendationsPage() {
                     {getIconForType(rec.type)}
                     <CardTitle className="text-xl text-primary">{rec.name}</CardTitle>
                   </div>
-                   <Image 
-                    src={`https://picsum.photos/seed/rec${index}/400/200`} 
-                    alt={rec.name} 
-                    width={400} 
-                    height={200} 
-                    className="rounded-md object-cover w-full h-40"
-                    data-ai-hint={`${rec.type} place`}
-                  />
+                  {/* Image removed from here */}
                   <CardDescription className="text-sm text-muted-foreground mt-2">Type: {rec.type}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow">
@@ -161,7 +154,7 @@ export default function RecommendationsPage() {
                 Fill out the form above to get AI-powered recommendations for your trip!
               </CardDescription>
               <Image 
-                src="https://picsum.photos/seed/waiting-recommendation/400/250" 
+                src="https://placehold.co/400x250.png"
                 alt="Waiting for recommendations illustration" 
                 width={400} 
                 height={250} 
