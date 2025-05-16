@@ -16,7 +16,7 @@ const navItems = [
   { href: "/trips", label: "My Trips", icon: PlaneTakeoff }, 
   { href: "/itinerary", label: "Itinerary", icon: ListChecks },
   // { href: "/map", label: "Map", icon: MapPin }, // Removed Map link
-  { href: "/recommendations", label: "Recommendations", icon: Sparkles },
+  // { href: "/recommendations", label: "Recommendations", icon: Sparkles }, // Removed Recommendations link
   { href: "/packing-list", label: "Packing List", icon: Luggage },
   { href: "/polls", label: "Group Polls", icon: UsersRound },
   { href: "/expenses", label: "Expenses", icon: DollarSign },
@@ -50,4 +50,3 @@ export function SidebarNav() {
     </SidebarMenu>
   );
 }
-
