@@ -19,7 +19,7 @@ export interface Poll {
   options: PollOption[];
   createdBy: string; // UID of the user who created the poll
   createdAt: number; // Timestamp of creation
-  // userVote?: string; // This will be managed client-side in PollsPage for UI purposes
+  votedBy?: { [userId: string]: string }; // userId: optionId, tracks which option a user voted for
 }
 
 export interface ItineraryComment {

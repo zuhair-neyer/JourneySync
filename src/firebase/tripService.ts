@@ -443,7 +443,11 @@ export async function addPollToTripDb(tripId: string, pollData: Omit<Poll, 'id' 
       console.error("[tripService] addPollToTripDb: Failed to generate poll ID.");
       return null;
     }
-    const pollToAdd: Omit<Poll, 'tripId'> = { ...pollData, id: pollId };
+    const pollToAdd: Omit<Poll, 'tripId'> = { 
+        ...pollData, 
+        id: pollId,
+        votedBy: pollData.votedBy || {}, // Ensure votedBy is initialized
+    };
     await set(newPollRef, pollToAdd);
     return pollId;
   } catch (error: any) {
@@ -465,6 +469,7 @@ export async function getPollsForTripFromDb(tripId: string): Promise<Poll[]> {
         ...pollsData[pollId],
         id: pollId,
         tripId: tripId,
+        votedBy: pollsData[pollId].votedBy || {}, // Ensure votedBy exists
       }));
       return pollsArray;
     }
@@ -475,28 +480,87 @@ export async function getPollsForTripFromDb(tripId: string): Promise<Poll[]> {
   }
 }
 
-export async function updatePollInTripDb(tripId: string, pollId: string, pollData: Partial<Omit<Poll, 'id' | 'tripId'>>): Promise<boolean> {
+// This function is for editing the poll's question or options, not for voting.
+export async function updatePollInTripDb(tripId: string, pollId: string, pollData: Partial<Omit<Poll, 'id' | 'tripId' | 'votedBy'>>): Promise<boolean> {
   if (!tripId || !pollId) {
     console.error("[tripService] updatePollInTripDb: Trip ID and Poll ID are required.");
     return false;
   }
   try {
-    const updates: { [key: string]: any } = {};
-    if (pollData.question !== undefined) updates[`trips/${tripId}/polls/${pollId}/question`] = pollData.question;
-    if (pollData.options !== undefined) updates[`trips/${tripId}/polls/${pollId}/options`] = pollData.options;
+    const pollRef = child(ref(database, `trips/${tripId}/polls`), pollId);
+    const updates: Partial<Omit<Poll, 'id' | 'tripId' | 'votedBy'>> = {};
+    if (pollData.question !== undefined) updates.question = pollData.question;
+    if (pollData.options !== undefined) updates.options = pollData.options;
     
     if (Object.keys(updates).length === 0) {
         console.warn("[tripService] updatePollInTripDb: No valid fields to update provided.");
         return true; 
     }
 
-    await update(ref(database), updates);
+    await update(pollRef, updates);
     return true;
   } catch (error: any) {
     console.error(`[tripService] updatePollInTripDb: Error updating poll ${pollId} in trip ${tripId}:`, error.message);
     return false;
   }
 }
+
+export async function updatePollVoteInDb(tripId: string, pollId: string, userId: string, newOptionId: string): Promise<boolean> {
+  if (!tripId || !pollId || !userId || !newOptionId) {
+    console.error("[tripService] updatePollVoteInDb: Missing required parameters.");
+    return false;
+  }
+  const pollRefNode = child(ref(database, `trips/${tripId}/polls`), pollId);
+
+  try {
+    const pollSnapshot = await get(pollRefNode);
+    if (!pollSnapshot.exists()) {
+      console.error(`[tripService] updatePollVoteInDb: Poll ${pollId} not found.`);
+      return false;
+    }
+
+    const pollData = pollSnapshot.val() as Poll;
+    const currentOptions = pollData.options || [];
+    const currentVotedBy = pollData.votedBy || {};
+
+    const oldOptionIdForUser = currentVotedBy[userId];
+
+    // If user already voted for this same newOptionId, do nothing (or treat as success).
+    if (oldOptionIdForUser === newOptionId) {
+      console.log(`[tripService] updatePollVoteInDb: User ${userId} already voted for option ${newOptionId}. No change.`);
+      return true;
+    }
+
+    const updates: { [key: string]: any } = {};
+
+    // Decrement vote from old option if user had voted previously and is changing vote
+    if (oldOptionIdForUser) {
+      const oldOptionIndex = currentOptions.findIndex(opt => opt.id === oldOptionIdForUser);
+      if (oldOptionIndex !== -1) {
+        updates[`options/${oldOptionIndex}/votes`] = Math.max(0, (currentOptions[oldOptionIndex].votes || 0) - 1);
+      }
+    }
+
+    // Increment vote for new option
+    const newOptionIndex = currentOptions.findIndex(opt => opt.id === newOptionId);
+    if (newOptionIndex !== -1) {
+      updates[`options/${newOptionIndex}/votes`] = (currentOptions[newOptionIndex].votes || 0) + 1;
+    } else {
+      console.error(`[tripService] updatePollVoteInDb: New option ${newOptionId} not found in poll ${pollId}.`);
+      return false; 
+    }
+
+    // Record the user's new vote
+    updates[`votedBy/${userId}`] = newOptionId;
+
+    await update(pollRefNode, updates);
+    return true;
+  } catch (error: any) {
+    console.error(`[tripService] updatePollVoteInDb: Error updating vote for poll ${pollId}:`, error.message);
+    return false;
+  }
+}
+
 
 export async function deletePollFromTripDb(tripId: string, pollId: string): Promise<boolean> {
   if (!tripId || !pollId) {

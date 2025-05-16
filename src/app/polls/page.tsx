@@ -14,12 +14,12 @@ import type { Poll, PollOption } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTripContext } from '@/contexts/TripContext';
 import { useToast } from '@/hooks/use-toast';
-import { addPollToTripDb, getPollsForTripFromDb, updatePollInTripDb, deletePollFromTripDb } from '@/firebase/tripService';
+import { addPollToTripDb, getPollsForTripFromDb, updatePollInTripDb, deletePollFromTripDb, updatePollVoteInDb } from '@/firebase/tripService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 interface PollWithClientVote extends Poll {
-  userVote?: string; // Option ID for the current user's vote on this poll
+  // userVote is now derived from poll.votedBy directly in the component
 }
 
 export default function PollsPage() {
@@ -34,9 +34,6 @@ export default function PollsPage() {
   const [newPollOptions, setNewPollOptions] = useState(''); // Comma-separated
   const [editingPoll, setEditingPoll] = useState<PollWithClientVote | null>(null);
   
-  // Client-side map to store user's vote for each poll to persist UI selection across re-renders
-  const [userVotes, setUserVotes] = useState<Record<string, string>>({}); // { pollId: optionId }
-
   const fetchTripPolls = useCallback(async () => {
     if (!selectedTripId) {
       setPolls([]);
@@ -45,8 +42,7 @@ export default function PollsPage() {
     setIsLoadingPolls(true);
     try {
       const fetchedPolls = await getPollsForTripFromDb(selectedTripId);
-      // Restore client-side vote status
-      setPolls(fetchedPolls.map(p => ({ ...p, userVote: userVotes[p.id] })));
+      setPolls(fetchedPolls);
     } catch (error) {
       console.error("Failed to fetch polls:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load polls for this trip." });
@@ -54,7 +50,7 @@ export default function PollsPage() {
     } finally {
       setIsLoadingPolls(false);
     }
-  }, [selectedTripId, toast, userVotes]);
+  }, [selectedTripId, toast]);
 
   useEffect(() => {
     fetchTripPolls();
@@ -84,11 +80,13 @@ export default function PollsPage() {
       options: optionsArray,
       createdBy: currentUser.uid,
       createdAt: Date.now(),
+      votedBy: {}, // Initialize votedBy
     };
 
     let success = false;
     if (editingPoll) {
         // For editing, we update the existing poll in Firebase
+        // Note: votedBy is not typically edited here; only question/options.
         success = await updatePollInTripDb(selectedTripId, editingPoll.id, { question: newPollQuestion, options: optionsArray });
         if (success) toast({ title: "Success", description: "Poll updated." });
     } else {
@@ -100,7 +98,7 @@ export default function PollsPage() {
     }
     
     if (success) {
-      fetchTripPolls(); // Refetch polls
+      fetchTripPolls(); 
       setNewPollQuestion('');
       setNewPollOptions('');
       setEditingPoll(null);
@@ -111,37 +109,45 @@ export default function PollsPage() {
   };
 
   const handleVote = async (pollId: string, optionId: string) => {
-    if (!selectedTripId || !currentUser) return;
+    if (!selectedTripId || !currentUser) {
+        toast({ variant: "destructive", title: "Error", description: "You must be logged in to vote." });
+        return;
+    }
 
-    const pollIndex = polls.findIndex(p => p.id === pollId);
-    if (pollIndex === -1) return;
+    // Optimistic UI update (optional but good for UX)
+    const originalPolls = [...polls];
+    setPolls(prevPolls => 
+        prevPolls.map(p => {
+            if (p.id === pollId) {
+                const newVotedBy = { ...(p.votedBy || {}), [currentUser.uid]: optionId };
+                const newOptions = p.options.map(opt => {
+                    let newVotes = opt.votes;
+                    const oldVoteForThisOptionByCurrentUser = p.votedBy?.[currentUser.uid] === opt.id;
+                    const newVoteForThisOptionByCurrentUser = optionId === opt.id;
 
-    const pollToUpdate = { ...polls[pollIndex] };
-    const previouslyVotedOptionId = userVotes[pollId]; // Get user's previous vote for this poll
-    let newOptions = pollToUpdate.options.map(opt => {
-      let newVotes = opt.votes;
-      if (opt.id === optionId && opt.id !== previouslyVotedOptionId) { // Voted for a new option
-        newVotes = opt.votes + 1;
-      }
-      if (opt.id === previouslyVotedOptionId && opt.id !== optionId) { // Unvoting previous option
-        newVotes = Math.max(0, opt.votes - 1);
-      }
-      return { ...opt, votes: newVotes };
-    });
-    
-    // Optimistic UI update
-    const updatedPolls = [...polls];
-    updatedPolls[pollIndex] = { ...pollToUpdate, options: newOptions, userVote: optionId };
-    setPolls(updatedPolls);
-    setUserVotes(prev => ({ ...prev, [pollId]: optionId }));
+                    if (oldVoteForThisOptionByCurrentUser && !newVoteForThisOptionByCurrentUser) {
+                        newVotes = Math.max(0, newVotes - 1); // Decrement old
+                    }
+                    if (!oldVoteForThisOptionByCurrentUser && newVoteForThisOptionByCurrentUser) {
+                        newVotes = newVotes + 1; // Increment new
+                    }
+                    // If old and new are the same, votes don't change by this logic path.
+                    // If user is voting for first time for this option, it increments.
+                    return { ...opt, votes: newVotes };
+                });
+                return { ...p, options: newOptions, votedBy: newVotedBy };
+            }
+            return p;
+        })
+    );
 
-
-    // Update Firebase
-    const success = await updatePollInTripDb(selectedTripId, pollId, { options: newOptions });
-    if (!success) {
+    const success = await updatePollVoteInDb(selectedTripId, pollId, currentUser.uid, optionId);
+    if (success) {
+      toast({ title: "Vote Cast", description: "Your vote has been recorded." });
+      fetchTripPolls(); // Re-fetch to ensure consistency, especially if optimistic update is complex or disabled
+    } else {
       toast({ variant: "destructive", title: "Vote Error", description: "Failed to save vote. Please try again." });
-      // Revert optimistic update if Firebase update fails
-      fetchTripPolls(); 
+      setPolls(originalPolls); // Revert optimistic update
     }
   };
   
@@ -164,7 +170,7 @@ export default function PollsPage() {
     const success = await deletePollFromTripDb(selectedTripId, pollId);
     if (success) {
       toast({ title: "Success", description: "Poll deleted." });
-      fetchTripPolls(); // Refetch polls
+      fetchTripPolls(); 
     } else {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete poll." });
     }
@@ -255,7 +261,7 @@ export default function PollsPage() {
                 Please select a trip from the dropdown above to view or create polls.
               </CardDescription>
                <Image 
-                src="https://picsum.photos/seed/select-trip-polls/400/250" 
+                src="https://placehold.co/400x250.png" 
                 alt="Select a trip" 
                 width={400} 
                 height={250} 
@@ -283,7 +289,7 @@ export default function PollsPage() {
                 Create the first poll for this trip to help your group make decisions!
               </CardDescription>
                <Image 
-                src="https://picsum.photos/seed/empty-polls-trip/400/250" 
+                src="https://placehold.co/400x250.png" 
                 alt="Empty Polls Illustration for Trip" 
                 width={400} 
                 height={250} 
@@ -298,6 +304,7 @@ export default function PollsPage() {
         <div className="grid gap-6 md:grid-cols-2">
           {polls.map(poll => {
             const totalVotes = poll.options.reduce((sum, opt) => sum + opt.votes, 0);
+            const userVoteForThisPoll = currentUser ? poll.votedBy?.[currentUser.uid] : undefined;
             return (
               <Card key={poll.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 bg-card">
                 <CardHeader>
@@ -320,14 +327,15 @@ export default function PollsPage() {
                 </CardHeader>
                 <CardContent>
                   <RadioGroup 
-                    value={userVotes[poll.id]} 
+                    value={userVoteForThisPoll} 
                     onValueChange={(optionId) => handleVote(poll.id, optionId)} 
                     className="space-y-2"
+                    disabled={!currentUser} // Disable if no user logged in
                   >
                     {poll.options.map(option => (
                       <div key={option.id} className="flex flex-col">
                         <div className="flex items-center space-x-2 mb-1">
-                          <RadioGroupItem value={option.id} id={`${poll.id}-${option.id}`} />
+                          <RadioGroupItem value={option.id} id={`${poll.id}-${option.id}`} disabled={!currentUser} />
                           <Label htmlFor={`${poll.id}-${option.id}`} className="flex-grow">{option.text}</Label>
                           <span className="text-sm text-muted-foreground">({option.votes} votes)</span>
                         </div>
@@ -342,6 +350,7 @@ export default function PollsPage() {
                       </div>
                     ))}
                   </RadioGroup>
+                  {!currentUser && <p className="text-xs text-muted-foreground mt-2">Log in to vote.</p>}
                 </CardContent>
                 <CardFooter className="flex justify-between items-center border-t pt-4">
                   <span className="text-sm text-muted-foreground flex items-center"><BarChart3 className="mr-2 h-4 w-4" /> Total Votes: {totalVotes}</span>
@@ -354,4 +363,3 @@ export default function PollsPage() {
     </div>
   );
 }
-
